@@ -1,13 +1,13 @@
-"use client"
+"use client";
 
-import { useState, useRef, useEffect } from "react"
-import { MainLayout } from "@/components/layout/main-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Textarea } from "@/components/ui/textarea"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { useState, useRef, useEffect } from "react";
+import { MainLayout } from "@/components/layout/main-layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Bot,
   Send,
@@ -20,16 +20,17 @@ import {
   RotateCcw,
   Sparkles,
   MessageSquare,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
-import { teamMembers } from "@/lib/mock-data"
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { teamMembers } from "@/lib/mock-data";
+import { AIService, type ChatMessage } from "@/lib/ai-service";
 
 interface Message {
-  id: string
-  role: "user" | "assistant"
-  content: string
-  timestamp: Date
-  codeBlocks?: { language: string; code: string }[]
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+  codeBlocks?: { language: string; code: string }[];
 }
 
 const suggestedPrompts = [
@@ -38,127 +39,112 @@ const suggestedPrompts = [
   "Generate API documentation for this endpoint",
   "Review this code for potential improvements",
   "How do I implement authentication in Next.js?",
-]
+];
 
 const initialMessages: Message[] = [
   {
     id: "1",
     role: "assistant",
-    content: "Hello! I'm the Anka AI Assistant. I can help you with:\n\n- Writing and reviewing code\n- Generating documentation\n- Answering technical questions\n- Debugging issues\n- Best practices and recommendations\n\nHow can I assist you today?",
+    content:
+      "Hello! I'm the Anka AI Assistant. I can help you with:\n\n- Writing and reviewing code\n- Generating documentation\n- Answering technical questions\n- Debugging issues\n- Best practices and recommendations\n\nHow can I assist you today?",
     timestamp: new Date(Date.now() - 60000),
   },
-]
+];
+
+const GLOBAL_CONTEXT_ID = "global-chat";
 
 export default function AIAssistantPage() {
-  const [messages, setMessages] = useState<Message[]>(initialMessages)
-  const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Load chat history on mount
+  useEffect(() => {
+    const loadChatHistory = () => {
+      const history = AIService.getChatHistory(GLOBAL_CONTEXT_ID);
+      if (history.length > 0) {
+        const formattedMessages: Message[] = history.map((msg, index) => ({
+          id: index.toString(),
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+          timestamp: msg.timestamp || new Date(),
+        }));
+        setMessages(formattedMessages);
+      }
+    };
+    loadChatHistory();
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages])
+  }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return
+    if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
       content: input.trim(),
       timestamp: new Date(),
-    }
+    };
 
-    setMessages((prev) => [...prev, userMessage])
-    setInput("")
-    setIsLoading(true)
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const responses: Record<string, { content: string; code?: { language: string; code: string }[] }> = {
-        default: {
-          content: "I understand you're asking about that. Let me help you with a detailed response.\n\nHere are some key points to consider:\n\n1. **Best Practices**: Always follow the established patterns in your codebase\n2. **Performance**: Consider the impact on performance\n3. **Maintainability**: Write code that others can easily understand\n\nWould you like me to elaborate on any of these points?",
-        },
-        code: {
-          content: "Here's a React component example that you can use:",
-          code: [
-            {
-              language: "typescript",
-              code: `import { useState } from 'react'
-
-interface DataTableProps {
-  data: any[]
-  columns: Column[]
-}
-
-export function DataTable({ data, columns }: DataTableProps) {
-  const [sortColumn, setSortColumn] = useState<string | null>(null)
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
-
-  return (
-    <table className="w-full">
-      <thead>
-        <tr>
-          {columns.map((col) => (
-            <th key={col.key} onClick={() => handleSort(col.key)}>
-              {col.label}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {data.map((row, i) => (
-          <tr key={i}>
-            {columns.map((col) => (
-              <td key={col.key}>{row[col.key]}</td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}`,
-            },
-          ],
-        },
-      }
-
-      const isCodeRequest =
-        input.toLowerCase().includes("code") ||
-        input.toLowerCase().includes("component") ||
-        input.toLowerCase().includes("write")
-
-      const response = isCodeRequest ? responses.code : responses.default
+    try {
+      const response = await AIService.sendMessage(
+        userMessage.content,
+        GLOBAL_CONTEXT_ID,
+        "global",
+      );
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: response.content,
         timestamp: new Date(),
-        codeBlocks: response.code,
-      }
+      };
 
-      setMessages((prev) => [...prev, assistantMessage])
-      setIsLoading(false)
-    }, 1500)
-  }
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error("AI Service Error:", error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content:
+          "I apologize, but I encountered an error while processing your request. Please try again later.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text)
-    setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 2000)
-  }
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
+      e.preventDefault();
+      handleSend();
     }
-  }
+  };
+
+  const handleClearChat = () => {
+    AIService.clearChatContext(GLOBAL_CONTEXT_ID);
+    setMessages(initialMessages);
+  };
 
   return (
     <MainLayout breadcrumb={["Development", "AI Assistant"]}>
@@ -176,7 +162,9 @@ export function DataTable({ data, columns }: DataTableProps) {
                     <CardTitle className="text-lg font-semibold text-foreground">
                       AI Work Assistant
                     </CardTitle>
-                    <p className="text-sm text-muted-foreground">General workspace chat</p>
+                    <p className="text-sm text-muted-foreground">
+                      General workspace chat
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -184,7 +172,7 @@ export function DataTable({ data, columns }: DataTableProps) {
                     <Sparkles className="h-3 w-3 mr-1" />
                     GPT-4
                   </Badge>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={handleClearChat}>
                     <RotateCcw className="h-4 w-4 mr-2" />
                     Clear
                   </Button>
@@ -200,7 +188,7 @@ export function DataTable({ data, columns }: DataTableProps) {
                     key={message.id}
                     className={cn(
                       "flex gap-3",
-                      message.role === "user" && "flex-row-reverse"
+                      message.role === "user" && "flex-row-reverse",
                     )}
                   >
                     <Avatar className="h-8 w-8 shrink-0">
@@ -208,7 +196,7 @@ export function DataTable({ data, columns }: DataTableProps) {
                         className={cn(
                           message.role === "assistant"
                             ? "bg-primary text-primary-foreground"
-                            : "bg-secondary text-foreground"
+                            : "bg-secondary text-foreground",
                         )}
                       >
                         {message.role === "assistant" ? (
@@ -221,7 +209,7 @@ export function DataTable({ data, columns }: DataTableProps) {
                     <div
                       className={cn(
                         "flex-1 max-w-[80%] space-y-2",
-                        message.role === "user" && "flex flex-col items-end"
+                        message.role === "user" && "flex flex-col items-end",
                       )}
                     >
                       <div
@@ -229,10 +217,12 @@ export function DataTable({ data, columns }: DataTableProps) {
                           "rounded-lg p-4",
                           message.role === "assistant"
                             ? "bg-secondary/50"
-                            : "bg-primary text-primary-foreground"
+                            : "bg-primary text-primary-foreground",
                         )}
                       >
-                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        <p className="text-sm whitespace-pre-wrap">
+                          {message.content}
+                        </p>
                       </div>
 
                       {/* Code Blocks */}
@@ -252,7 +242,12 @@ export function DataTable({ data, columns }: DataTableProps) {
                               variant="ghost"
                               size="sm"
                               className="h-7 text-xs"
-                              onClick={() => copyToClipboard(block.code, `${message.id}-${i}`)}
+                              onClick={() =>
+                                copyToClipboard(
+                                  block.code,
+                                  `${message.id}-${i}`,
+                                )
+                              }
                             >
                               {copiedId === `${message.id}-${i}` ? (
                                 <>
@@ -371,7 +366,9 @@ export function DataTable({ data, columns }: DataTableProps) {
               <div className="flex items-start gap-3">
                 <Code className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-foreground">Code Generation</p>
+                  <p className="text-sm font-medium text-foreground">
+                    Code Generation
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     Write, review, and refactor code
                   </p>
@@ -380,7 +377,9 @@ export function DataTable({ data, columns }: DataTableProps) {
               <div className="flex items-start gap-3">
                 <FileText className="h-5 w-5 text-accent shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-foreground">Documentation</p>
+                  <p className="text-sm font-medium text-foreground">
+                    Documentation
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     Generate and improve docs
                   </p>
@@ -417,7 +416,10 @@ export function DataTable({ data, columns }: DataTableProps) {
                     <div className="relative">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="bg-secondary text-foreground text-xs">
-                          {member.name.split(" ").map((n) => n[0]).join("")}
+                          {member.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")}
                         </AvatarFallback>
                       </Avatar>
                       <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-success border-2 border-card" />
@@ -437,5 +439,5 @@ export function DataTable({ data, columns }: DataTableProps) {
         </div>
       </div>
     </MainLayout>
-  )
+  );
 }
