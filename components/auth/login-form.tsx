@@ -4,14 +4,6 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Globe, Mail, EyeOff, Eye, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -38,7 +30,7 @@ export default function LoginForm() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!formData.email || !formData.password) {
@@ -95,9 +87,15 @@ export default function LoginForm() {
         <h2 className="text-4xl text-gray-900 mb-2 font-medium">
           Welcome Back
         </h2>
-        <p className="text-gray-600 mb-8">
+        <p className="text-gray-600 mb-4">
           Enter your email and password to access your account
         </p>
+
+        <div className="mb-6 p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-600">
+          <p className="font-medium text-gray-700 mb-1">Test credentials</p>
+          <p>Email: <span className="font-mono">admin@anka.os</span></p>
+          <p>Password: <span className="font-mono">admin@123</span></p>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
@@ -116,7 +114,7 @@ export default function LoginForm() {
                 type="email"
                 name="email"
                 placeholder="Enter your email"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-gray-500 focus:border-gray-500 bg-gray-50 pl-10"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-gray-500 focus:border-gray-500 bg-gray-50 pl-10 text-gray-900"
                 value={formData.email}
                 onChange={handleChange}
                 required
@@ -135,7 +133,7 @@ export default function LoginForm() {
                 type={showPassword ? "text" : "password"}
                 name="password"
                 placeholder="Enter your password"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-gray-500 focus:border-gray-500 bg-gray-50 pl-10 pr-10"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-gray-500 focus:border-gray-500 bg-gray-50 pl-10 pr-10 text-gray-900"
                 value={formData.password}
                 onChange={handleChange}
                 required
