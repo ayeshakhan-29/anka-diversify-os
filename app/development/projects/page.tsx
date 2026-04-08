@@ -6,6 +6,7 @@ import { ProjectsHeader } from "@/components/project/ProjectsHeader";
 import { ProjectsGrid } from "@/components/project/ProjectsGrid";
 import { ProjectsList } from "@/components/project/ProjectsList";
 import { projects } from "@/lib/mock-data";
+import { ProjectGitHubService } from "@/lib/github-service";
 
 const phaseColors: Record<string, string> = {
   "product-modeling": "bg-chart-4/20 text-chart-4 border-chart-4/30",
@@ -42,7 +43,7 @@ export default function ProjectsPage() {
     return matchesSearch && matchesPhase;
   });
 
-  const handleAddProject = (projectData: {
+  const handleAddProject = async (projectData: {
     name: string;
     description: string;
     phase: string;
@@ -81,6 +82,21 @@ export default function ProjectsPage() {
     };
 
     setProjectsList([...projectsList, newProject]);
+
+    // Build GitHub context if GitHub URL is provided
+    if (projectData.githubUrl) {
+      try {
+        await ProjectGitHubService.buildProjectContext(
+          newProject.id,
+          projectData.githubUrl,
+        );
+        console.log("GitHub context built for project:", newProject.name);
+      } catch (error) {
+        console.error("Failed to build GitHub context:", error);
+        // Don't fail the project creation, just log the error
+      }
+    }
+
     console.log("Project added:", newProject);
   };
 

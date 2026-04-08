@@ -9,7 +9,7 @@ export interface GitHubRepo {
 export interface GitHubFile {
   name: string;
   path: string;
-  type: 'file' | 'dir';
+  type: "file" | "dir";
   content?: string;
   size: number;
   sha: string;
@@ -26,15 +26,15 @@ export interface GitHubRepoContext {
 }
 
 export class GitHubService {
-  private static baseUrl = 'https://api.github.com';
+  private static baseUrl = "https://api.github.com";
 
   // Get repository information
   static async getRepo(repo: GitHubRepo): Promise<any> {
     const url = `${this.baseUrl}/repos/${repo.owner}/${repo.repo}`;
     const response = await fetch(url, {
       headers: {
-        'Accept': 'application/vnd.github.v3+json',
-        'Authorization': `token ${process.env.GITHUB_TOKEN || ''}`,
+        Accept: "application/vnd.github.v3+json",
+        Authorization: `token ${process.env.GITHUB_TOKEN || ""}`,
       },
     });
 
@@ -48,14 +48,14 @@ export class GitHubService {
   // Get repository contents (recursive)
   static async getRepoContents(
     repo: GitHubRepo,
-    path: string = '',
-    files: GitHubFile[] = []
+    path: string = "",
+    files: GitHubFile[] = [],
   ): Promise<GitHubFile[]> {
     const url = `${this.baseUrl}/repos/${repo.owner}/${repo.repo}/contents/${path}`;
     const response = await fetch(url, {
       headers: {
-        'Accept': 'application/vnd.github.v3+json',
-        'Authorization': `token ${process.env.GITHUB_TOKEN || ''}`,
+        Accept: "application/vnd.github.v3+json",
+        Authorization: `token ${process.env.GITHUB_TOKEN || ""}`,
       },
     });
 
@@ -67,21 +67,45 @@ export class GitHubService {
 
     if (Array.isArray(contents)) {
       for (const item of contents) {
-        if (item.type === 'dir') {
+        if (item.type === "dir") {
           // Skip common directories we don't need for AI context
-          if (!['node_modules', '.git', '.next', 'dist', 'build'].includes(item.name)) {
+          if (
+            !["node_modules", ".git", ".next", "dist", "build"].includes(
+              item.name,
+            )
+          ) {
             await this.getRepoContents(repo, item.path, files);
           }
         } else {
           // Only include relevant file types
-          const extension = item.name.split('.').pop()?.toLowerCase();
+          const extension = item.name.split(".").pop()?.toLowerCase();
           const relevantExtensions = [
-            'ts', 'tsx', 'js', 'jsx', 'py', 'java', 'cpp', 'c', 'h',
-            'md', 'txt', 'json', 'yaml', 'yml', 'toml', 'env',
-            'css', 'scss', 'html', 'xml', 'sql', 'sh', 'dockerfile'
+            "ts",
+            "tsx",
+            "js",
+            "jsx",
+            "py",
+            "java",
+            "cpp",
+            "c",
+            "h",
+            "md",
+            "txt",
+            "json",
+            "yaml",
+            "yml",
+            "toml",
+            "env",
+            "css",
+            "scss",
+            "html",
+            "xml",
+            "sql",
+            "sh",
+            "dockerfile",
           ];
 
-          if (relevantExtensions.includes(extension || '')) {
+          if (relevantExtensions.includes(extension || "")) {
             files.push({
               name: item.name,
               path: item.path,
@@ -92,7 +116,7 @@ export class GitHubService {
           }
         }
       }
-    } else if (contents.type === 'file') {
+    } else if (contents.type === "file") {
       files.push({
         name: contents.name,
         path: contents.path,
@@ -110,8 +134,8 @@ export class GitHubService {
     const url = `${this.baseUrl}/repos/${repo.owner}/${repo.repo}/contents/${path}`;
     const response = await fetch(url, {
       headers: {
-        'Accept': 'application/vnd.github.v3+json',
-        'Authorization': `token ${process.env.GITHUB_TOKEN || ''}`,
+        Accept: "application/vnd.github.v3+json",
+        Authorization: `token ${process.env.GITHUB_TOKEN || ""}`,
       },
     });
 
@@ -120,22 +144,24 @@ export class GitHubService {
     }
 
     const data = await response.json();
-    
+
     if (data.content) {
       // GitHub API returns base64 encoded content
-      return Buffer.from(data.content, 'base64').toString('utf-8');
+      return Buffer.from(data.content, "base64").toString("utf-8");
     }
 
-    return '';
+    return "";
   }
 
   // Get repository languages
-  static async getRepoLanguages(repo: GitHubRepo): Promise<Record<string, number>> {
+  static async getRepoLanguages(
+    repo: GitHubRepo,
+  ): Promise<Record<string, number>> {
     const url = `${this.baseUrl}/repos/${repo.owner}/${repo.repo}/languages`;
     const response = await fetch(url, {
       headers: {
-        'Accept': 'application/vnd.github.v3+json',
-        'Authorization': `token ${process.env.GITHUB_TOKEN || ''}`,
+        Accept: "application/vnd.github.v3+json",
+        Authorization: `token ${process.env.GITHUB_TOKEN || ""}`,
       },
     });
 
@@ -151,31 +177,33 @@ export class GitHubService {
     try {
       // Get repository info
       const repoInfo = await this.getRepo(repo);
-      
+
       // Get all files
       const files = await this.getRepoContents(repo);
-      
+
       // Get languages
       const languages = await this.getRepoLanguages(repo);
-      
+
       // Read key files for context
       let readme: string | undefined;
       let packageJson: any;
-      
-      const readmeFile = files.find(f => 
-        f.name.toLowerCase().includes('readme') || f.name.toLowerCase() === 'readme.md'
+
+      const readmeFile = files.find(
+        (f) =>
+          f.name.toLowerCase().includes("readme") ||
+          f.name.toLowerCase() === "readme.md",
       );
       if (readmeFile) {
         readme = await this.getFileContent(repo, readmeFile.path);
       }
 
-      const packageFile = files.find(f => f.name === 'package.json');
+      const packageFile = files.find((f) => f.name === "package.json");
       if (packageFile) {
         const content = await this.getFileContent(repo, packageFile.path);
         try {
           packageJson = JSON.parse(content);
         } catch (e) {
-          console.warn('Failed to parse package.json');
+          console.warn("Failed to parse package.json");
         }
       }
 
@@ -183,7 +211,12 @@ export class GitHubService {
       const structure = this.buildFileTree(files);
 
       // Generate summary
-      const summary = this.generateRepoSummary(repoInfo, languages, files, packageJson);
+      const summary = this.generateRepoSummary(
+        repoInfo,
+        languages,
+        files,
+        packageJson,
+      );
 
       return {
         repo,
@@ -195,7 +228,7 @@ export class GitHubService {
         summary,
       };
     } catch (error) {
-      console.error('Error building repo context:', error);
+      console.error("Error building repo context:", error);
       throw error;
     }
   }
@@ -203,11 +236,11 @@ export class GitHubService {
   // Build file tree structure
   private static buildFileTree(files: GitHubFile[]): string {
     const tree: { [key: string]: any } = {};
-    
-    files.forEach(file => {
-      const parts = file.path.split('/');
+
+    files.forEach((file) => {
+      const parts = file.path.split("/");
       let current = tree;
-      
+
       parts.forEach((part, index) => {
         if (!current[part]) {
           current[part] = index === parts.length - 1 ? file : {};
@@ -221,10 +254,10 @@ export class GitHubService {
 
   // Render tree as string
   private static renderTree(tree: any, depth: number): string {
-    let result = '';
-    const indent = '  '.repeat(depth);
-    
-    Object.keys(tree).forEach(key => {
+    let result = "";
+    const indent = "  ".repeat(depth);
+
+    Object.keys(tree).forEach((key) => {
       const item = tree[key];
       if (item.type) {
         result += `${indent}${key} (${item.type})\n`;
@@ -233,7 +266,7 @@ export class GitHubService {
         result += this.renderTree(item, depth + 1);
       }
     });
-    
+
     return result;
   }
 
@@ -242,27 +275,32 @@ export class GitHubService {
     repoInfo: any,
     languages: Record<string, number>,
     files: GitHubFile[],
-    packageJson: any
+    packageJson: any,
   ): string {
-    const languageList = Object.keys(languages).sort((a, b) => languages[b] - languages[a]);
-    const fileTypes = files.reduce((acc, file) => {
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'no-extension';
-      acc[ext] = (acc[ext] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const languageList = Object.keys(languages).sort(
+      (a, b) => languages[b] - languages[a],
+    );
+    const fileTypes = files.reduce(
+      (acc, file) => {
+        const ext = file.name.split(".").pop()?.toLowerCase() || "no-extension";
+        acc[ext] = (acc[ext] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
     let summary = `Repository: ${repoInfo.full_name}\n`;
-    summary += `Description: ${repoInfo.description || 'No description'}\n`;
+    summary += `Description: ${repoInfo.description || "No description"}\n`;
     summary += `Language: ${repoInfo.language}\n`;
     summary += `Stars: ${repoInfo.stargazers_count}, Forks: ${repoInfo.forks_count}\n`;
     summary += `Files: ${files.length} total\n`;
-    summary += `Languages: ${languageList.join(', ')}\n`;
-    
+    summary += `Languages: ${languageList.join(", ")}\n`;
+
     if (packageJson) {
-      summary += `Package: ${packageJson.name || 'Unknown'} v${packageJson.version || 'Unknown'}\n`;
+      summary += `Package: ${packageJson.name || "Unknown"} v${packageJson.version || "Unknown"}\n`;
       if (packageJson.dependencies) {
         const deps = Object.keys(packageJson.dependencies).slice(0, 10);
-        summary += `Main dependencies: ${deps.join(', ')}\n`;
+        summary += `Main dependencies: ${deps.join(", ")}\n`;
       }
     }
 
@@ -273,32 +311,41 @@ export class GitHubService {
   static async searchRelevantFiles(
     repo: GitHubRepo,
     query: string,
-    maxFiles: number = 10
+    maxFiles: number = 10,
   ): Promise<GitHubFile[]> {
     const files = await this.getRepoContents(repo);
-    
+
     // Simple relevance scoring based on filename and path
-    const scoredFiles = files.map(file => {
+    const scoredFiles = files.map((file) => {
       let score = 0;
       const queryLower = query.toLowerCase();
       const nameLower = file.name.toLowerCase();
       const pathLower = file.path.toLowerCase();
-      
+
       // Exact name match
       if (nameLower === queryLower) score += 100;
       // Name contains query
       if (nameLower.includes(queryLower)) score += 50;
       // Path contains query
       if (pathLower.includes(queryLower)) score += 25;
-      
+
       // File type relevance
-      const ext = file.name.split('.').pop()?.toLowerCase();
-      const codeExtensions = ['ts', 'tsx', 'js', 'jsx', 'py', 'java', 'cpp', 'c'];
-      const docExtensions = ['md', 'txt', 'rst'];
-      
-      if (codeExtensions.includes(ext || '')) score += 10;
-      if (docExtensions.includes(ext || '')) score += 5;
-      
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      const codeExtensions = [
+        "ts",
+        "tsx",
+        "js",
+        "jsx",
+        "py",
+        "java",
+        "cpp",
+        "c",
+      ];
+      const docExtensions = ["md", "txt", "rst"];
+
+      if (codeExtensions.includes(ext || "")) score += 10;
+      if (docExtensions.includes(ext || "")) score += 5;
+
       return { ...file, score };
     });
 
@@ -311,24 +358,63 @@ export class GitHubService {
   static async getMultipleFileContents(
     repo: GitHubRepo,
     files: GitHubFile[],
-    maxFiles: number = 20
+    maxFiles: number = 20,
   ): Promise<{ file: GitHubFile; content: string }[]> {
     const limitedFiles = files.slice(0, maxFiles);
     const results: { file: GitHubFile; content: string }[] = [];
-    
+
     // Add delay between requests to avoid rate limiting
     for (const file of limitedFiles) {
       try {
         const content = await this.getFileContent(repo, file.path);
         results.push({ file, content });
-        
+
         // Small delay to avoid hitting rate limits
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (error) {
         console.warn(`Failed to fetch content for ${file.path}:`, error);
       }
     }
-    
+
     return results;
+  }
+}
+
+// Project-specific GitHub service for context building
+export class ProjectGitHubService {
+  static async buildProjectContext(
+    projectId: string,
+    githubUrl: string,
+  ): Promise<void> {
+    // TODO: Implement GitHub context building for projects
+    // This would typically involve:
+    // - Parsing the GitHub URL to extract owner/repo
+    // - Fetching repository structure and files
+    // - Analyzing codebase for project context
+    // - Storing context for AI conversations
+
+    console.log(
+      `Building GitHub context for project ${projectId} from ${githubUrl}`,
+    );
+
+    // Placeholder implementation
+    try {
+      const url = new URL(githubUrl);
+      const pathParts = url.pathname
+        .split("/")
+        .filter((part) => part.length > 0);
+
+      if (pathParts.length >= 2) {
+        const [owner, repo] = pathParts;
+        const repoInfo = { owner, repo };
+
+        // Fetch basic repository info
+        const context = await GitHubService.getRepoContents(repoInfo);
+        console.log(`Fetched context for ${owner}/${repo}:`, context);
+      }
+    } catch (error) {
+      console.error("Failed to build GitHub context:", error);
+      throw error;
+    }
   }
 }
