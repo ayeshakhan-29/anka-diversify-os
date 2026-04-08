@@ -1,5 +1,7 @@
+import { aiClient } from "./ai-client";
+
 export interface ChatMessage {
-  role: "system" | "user" | "assistant";
+  role: "user" | "assistant";
   content: string;
   timestamp?: Date;
 }
@@ -15,18 +17,13 @@ export interface ChatContext {
 
 export interface AIResponse {
   content: string;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
+  sessionId?: string;
 }
 
-// In-memory storage for chat contexts (in production, use a database)
+// In-memory store for within-session history (lost on page refresh — backend is source of truth)
 const chatContexts = new Map<string, ChatContext>();
 
 export class AIService {
-  // Get or create chat context
   static getChatContext(
     contextId: string,
     type: "global" | "project",
@@ -34,7 +31,6 @@ export class AIService {
     projectName?: string,
   ): ChatContext {
     let context = chatContexts.get(contextId);
-
     if (!context) {
       context = {
         id: contextId,
@@ -46,32 +42,21 @@ export class AIService {
       };
       chatContexts.set(contextId, context);
     }
-
     return context;
   }
 
-  // Save chat context
-  static saveChatContext(context: ChatContext): void {
-    context.lastUpdated = new Date();
-    chatContexts.set(context.id, context);
-  }
-
-  // Get all chat contexts
-  static getAllChatContexts(): ChatContext[] {
-    return Array.from(chatContexts.values());
-  }
-
-  // Clear chat context
   static clearChatContext(contextId: string): void {
     const context = chatContexts.get(contextId);
     if (context) {
       context.messages = [];
       context.lastUpdated = new Date();
-      chatContexts.set(contextId, context);
     }
   }
 
-  // Send message to AI with context via API
+  static getChatHistory(contextId: string): ChatMessage[] {
+    return chatContexts.get(contextId)?.messages ?? [];
+  }
+
   static async sendMessage(
     userMessage: string,
     contextId: string,
@@ -79,101 +64,43 @@ export class AIService {
     projectId?: string,
     projectName?: string,
   ): Promise<AIResponse> {
-    const context = this.getChatContext(
-      contextId,
-      type,
-      projectId,
-      projectName,
-    );
+    const context = this.getChatContext(contextId, type, projectId, projectName);
 
-    // Add user message to context
-    const message: ChatMessage = {
-      role: "user",
-      content: userMessage,
-      timestamp: new Date(),
-    };
-    context.messages.push(message);
+    context.messages.push({ role: "user", content: userMessage, timestamp: new Date() });
 
     try {
-      // Call the API endpoint
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: context.messages,
-          contextType: type,
-          projectId,
-          projectName,
-        }),
-      });
+      let responseText: string;
+      let sessionId: string;
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+      if (type === "project" && projectId) {
+        // Route project chats to backend — includes GitHub repo context
+        const res = await aiClient.sendProjectMessage(projectId, {
+          message: userMessage,
+          sessionId: contextId,
+        });
+        responseText = res.message;
+        sessionId = res.sessionId;
+      } else {
+        // Route general chats to backend for persistence
+        const res = await aiClient.sendGeneralMessage({
+          message: userMessage,
+          sessionId: contextId,
+        });
+        responseText = res.message;
+        sessionId = res.sessionId;
       }
 
-      const data = await response.json();
+      context.messages.push({ role: "assistant", content: responseText, timestamp: new Date() });
+      context.lastUpdated = new Date();
 
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      // Add AI response to context
-      const aiMessage: ChatMessage = {
-        role: "assistant",
-        content: data.content,
-        timestamp: new Date(),
-      };
-      context.messages.push(aiMessage);
-
-      // Save context
-      this.saveChatContext(context);
-
-      return {
-        content: data.content,
-        usage: data.usage,
-      };
+      return { content: responseText, sessionId };
     } catch (error) {
-      console.error("AI Service Error:", error);
-
-      // Remove the user message if the API call failed
+      console.error("AIService.sendMessage error:", error);
+      // Roll back the user message on failure
       context.messages.pop();
-
       return {
-        content:
-          "I apologize, but I encountered an error while processing your request. Please try again later.",
+        content: "I encountered an error while processing your request. Please try again.",
       };
     }
-  }
-
-  // Get chat history
-  static getChatHistory(contextId: string): ChatMessage[] {
-    const context = chatContexts.get(contextId);
-    return context ? context.messages : [];
-  }
-
-  // Get project-specific context summary
-  static getProjectContextSummary(
-    projectId: string,
-    projectName: string,
-  ): string {
-    const projectContexts = Array.from(chatContexts.values()).filter(
-      (ctx) => ctx.type === "project" && ctx.projectId === projectId,
-    );
-
-    if (projectContexts.length === 0) {
-      return `No previous conversations found for project "${projectName}".`;
-    }
-
-    const totalMessages = projectContexts.reduce(
-      (sum, ctx) => sum + ctx.messages.length,
-      0,
-    );
-    const lastActivity = Math.max(
-      ...projectContexts.map((ctx) => ctx.lastUpdated.getTime()),
-    );
-
-    return `Project "${projectName}" has ${totalMessages} messages across ${projectContexts.length} conversations. Last activity: ${new Date(lastActivity).toLocaleString()}`;
   }
 }

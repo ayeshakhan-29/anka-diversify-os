@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { ProjectsHeader } from "@/components/project/ProjectsHeader";
 import { ProjectsGrid } from "@/components/project/ProjectsGrid";
 import { ProjectsList } from "@/components/project/ProjectsList";
-import { projects } from "@/lib/mock-data";
-import { ProjectGitHubService } from "@/lib/github-service";
+import { projects as mockProjects } from "@/lib/mock-data";
+import { projectApi } from "@/lib/project-api";
+import type { Project } from "@/lib/types";
 
 const phaseColors: Record<string, string> = {
   "product-modeling": "bg-chart-4/20 text-chart-4 border-chart-4/30",
@@ -33,7 +34,27 @@ export default function ProjectsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [phaseFilter, setPhaseFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [projectsList, setProjectsList] = useState(projects);
+  const [projectsList, setProjectsList] = useState<Project[]>(mockProjects);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch projects from backend on mount; fall back to mock data if unavailable
+  useEffect(() => {
+    projectApi
+      .getAll()
+      .then((backendProjects) => {
+        // Merge: backend projects first, then any mock projects not already present
+        const backendIds = new Set(backendProjects.map((p) => p.id));
+        const merged = [
+          ...backendProjects,
+          ...mockProjects.filter((p) => !backendIds.has(p.id)),
+        ];
+        setProjectsList(merged);
+      })
+      .catch(() => {
+        // Backend unavailable — keep mock data
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   const filteredProjects = projectsList.filter((project) => {
     const matchesSearch =
@@ -51,71 +72,50 @@ export default function ProjectsPage() {
     priority: string;
     teamLead?: string;
   }) => {
-    const newProject = {
-      id: Date.now().toString(),
-      name: projectData.name,
-      description: projectData.description,
-      phase: projectData.phase as any,
-      progress: 0,
-      team: [
+    try {
+      const created = await projectApi.create({
+        name: projectData.name,
+        description: projectData.description,
+        phase: projectData.phase,
+        priority: projectData.priority,
+        githubUrl: projectData.githubUrl || undefined,
+      });
+
+      setProjectsList((prev) => [created, ...prev]);
+    } catch (error) {
+      console.warn("Backend unavailable, adding project locally:", error);
+      // Optimistic local fallback
+      setProjectsList((prev) => [
         {
-          id: "current",
-          name: "Admin User",
-          avatar: "",
-          email: "admin@example.com",
-          role: "admin",
-          department: "engineering",
-          status: "online" as const,
+          id: Date.now().toString(),
+          name: projectData.name,
+          description: projectData.description,
+          phase: projectData.phase as any,
+          progress: 0,
+          team: [],
+          githubUrl: projectData.githubUrl || undefined,
+          startDate: new Date().toISOString(),
+          dueDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+          tasks: [],
+          priority: projectData.priority as any,
+          status: "active",
         },
-      ],
-      githubUrl: projectData.githubUrl,
-      lastCommit: {
-        message: "Initial project setup",
-        author: "Admin User",
-        timestamp: new Date().toISOString(),
-      },
-      startDate: new Date().toISOString(),
-      dueDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-      tasks: [],
-      priority: projectData.priority as any,
-      status: "active" as const,
-    };
-
-    setProjectsList([...projectsList, newProject]);
-
-    // Build GitHub context if GitHub URL is provided
-    if (projectData.githubUrl) {
-      try {
-        await ProjectGitHubService.buildProjectContext(
-          newProject.id,
-          projectData.githubUrl,
-        );
-        console.log("GitHub context built for project:", newProject.name);
-      } catch (error) {
-        console.error("Failed to build GitHub context:", error);
-        // Don't fail the project creation, just log the error
-      }
+        ...prev,
+      ]);
     }
-
-    console.log("Project added:", newProject);
   };
 
-  const getProjectProgress = (project: (typeof projects)[0]) => {
-    const totalTasks = project.tasks.length;
-    const completedTasks = project.tasks.filter(
-      (t) => t.status === "done",
-    ).length;
-    return totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const getProjectProgress = (project: Project) => {
+    const total = project.tasks.length;
+    const done = project.tasks.filter((t) => t.status === "done").length;
+    return total > 0 ? Math.round((done / total) * 100) : project.progress ?? 0;
   };
 
-  const getTaskStats = (project: (typeof projects)[0]) => {
-    return {
-      todo: project.tasks.filter((t) => t.status === "todo").length,
-      inProgress: project.tasks.filter((t) => t.status === "in-progress")
-        .length,
-      done: project.tasks.filter((t) => t.status === "done").length,
-    };
-  };
+  const getTaskStats = (project: Project) => ({
+    todo: project.tasks.filter((t) => t.status === "todo").length,
+    inProgress: project.tasks.filter((t) => t.status === "in-progress").length,
+    done: project.tasks.filter((t) => t.status === "done").length,
+  });
 
   return (
     <MainLayout breadcrumb={["Development", "Projects"]}>
@@ -132,8 +132,11 @@ export default function ProjectsPage() {
           onAddProject={handleAddProject}
         />
 
-        {/* Projects Grid/List */}
-        {viewMode === "grid" ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
+            Loading projects...
+          </div>
+        ) : viewMode === "grid" ? (
           <ProjectsGrid
             filteredProjects={filteredProjects}
             phaseColors={phaseColors}
