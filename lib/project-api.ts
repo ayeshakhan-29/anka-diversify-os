@@ -8,6 +8,31 @@ const headers = {
   "X-User-ID": DEMO_USER_ID,
 };
 
+// in-progress ↔ in_progress conversion
+function toFrontendStatus(s: string): Task["status"] {
+  if (s === "in_progress") return "in-progress";
+  return s as Task["status"];
+}
+function toBackendStatus(s: string): string {
+  if (s === "in-progress") return "in_progress";
+  return s;
+}
+
+function mapTask(t: any, projectId: string): Task {
+  return {
+    id: t.id,
+    title: t.title,
+    description: t.description || "",
+    status: toFrontendStatus(t.status),
+    priority: t.priority as Task["priority"],
+    projectId: t.projectId || projectId,
+    phase: (t.phase || "development") as Task["phase"],
+    dueDate: t.dueDate ? new Date(t.dueDate).toISOString() : "",
+    createdAt: t.createdAt ? new Date(t.createdAt).toISOString() : "",
+    tags: [],
+  };
+}
+
 // Map backend project row → frontend Project shape
 function mapProject(p: any): Project {
   return {
@@ -22,18 +47,7 @@ function mapProject(p: any): Project {
     startDate: p.startDate ? new Date(p.startDate).toISOString() : new Date().toISOString(),
     dueDate: p.dueDate ? new Date(p.dueDate).toISOString() : new Date().toISOString(),
     team: [],   // populated from mock-data elsewhere if needed
-    tasks: (p.tasks || []).map((t: any): Task => ({
-      id: t.id,
-      title: t.title,
-      description: t.description || "",
-      status: t.status === "in_progress" ? "in-progress" : t.status,
-      priority: t.priority,
-      projectId: t.projectId,
-      phase: p.phase || "development",
-      dueDate: t.dueDate ? new Date(t.dueDate).toISOString() : "",
-      createdAt: t.createdAt ? new Date(t.createdAt).toISOString() : "",
-      tags: [],
-    })),
+    tasks: (p.tasks || []).map((t: any) => mapTask(t, p.id)),
   };
 }
 
@@ -97,6 +111,59 @@ export const projectApi = {
       headers,
     });
     if (!res.ok) throw new Error(`DELETE /projects/${id} failed: ${res.status}`);
+  },
+
+  // ── Tasks ──────────────────────────────────────────────────────────────────
+
+  async getTasks(projectId: string): Promise<Task[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks`, { headers });
+    if (!res.ok) throw new Error(`GET tasks failed: ${res.status}`);
+    const { data } = await res.json();
+    return (data as any[]).map((t) => mapTask(t, projectId));
+  },
+
+  async createTask(projectId: string, payload: {
+    title: string;
+    description?: string;
+    status?: string;
+    priority?: string;
+    phase?: string;
+    dueDate?: string;
+  }): Promise<Task> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ ...payload, status: payload.status ? toBackendStatus(payload.status) : undefined }),
+    });
+    if (!res.ok) throw new Error(`POST task failed: ${res.status}`);
+    const { data } = await res.json();
+    return mapTask(data, projectId);
+  },
+
+  async updateTask(projectId: string, taskId: string, payload: {
+    status?: string;
+    title?: string;
+    description?: string;
+    priority?: string;
+    phase?: string;
+    dueDate?: string;
+  }): Promise<Task> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks/${taskId}`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ ...payload, status: payload.status ? toBackendStatus(payload.status) : undefined }),
+    });
+    if (!res.ok) throw new Error(`PUT task failed: ${res.status}`);
+    const { data } = await res.json();
+    return mapTask(data, projectId);
+  },
+
+  async deleteTask(projectId: string, taskId: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks/${taskId}`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!res.ok) throw new Error(`DELETE task failed: ${res.status}`);
   },
 
   async syncGithub(projectId: string, githubUrl: string): Promise<void> {

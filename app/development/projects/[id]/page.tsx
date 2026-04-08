@@ -113,14 +113,23 @@ export default function ProjectDetailPage({
   // Seed from mock so the page renders immediately, then hydrate from backend
   const seedProject = mockProjects.find((p) => p.id === id) || mockProjects[0];
   const [project, setProject] = useState<Project>(seedProject);
-  const [tasks, setTasks] = useState<Task[]>(seedProject.tasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
 
-  // Fetch real data from backend on mount
+  // Fetch project metadata from backend
   useEffect(() => {
     projectApi.getById(id).then((p) => {
       setProject(p);
-      if (p.tasks.length > 0) setTasks(p.tasks);
     }).catch(() => { /* keep mock seed */ });
+  }, [id]);
+
+  // Fetch real tasks from backend (separate from project metadata)
+  useEffect(() => {
+    setTasksLoading(true);
+    projectApi.getTasks(id)
+      .then((t) => setTasks(t))
+      .catch(() => setTasks(seedProject.tasks)) // fall back to mock tasks
+      .finally(() => setTasksLoading(false));
   }, [id]);
 
   // ── kanban state ──
@@ -136,6 +145,9 @@ export default function ProjectDetailPage({
 
   // ── task detail sidebar ──
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  // ── delete task confirmation ──
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
   // ── edit project dialog ──
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -185,23 +197,41 @@ export default function ProjectDetailPage({
   const handleDragOver = (e: React.DragEvent) => e.preventDefault();
   const handleDrop = (status: string) => {
     if (!draggedTask) return;
+    const newStatus = status as Task["status"];
+    // Optimistic update
     setTasks((prev) =>
-      prev.map((t) =>
-        t.id === draggedTask.id ? { ...t, status: status as Task["status"] } : t,
-      ),
+      prev.map((t) => t.id === draggedTask.id ? { ...t, status: newStatus } : t),
     );
+    // Persist to backend
+    projectApi.updateTask(id, draggedTask.id, { status }).catch(() => {
+      // Roll back on failure
+      setTasks((prev) =>
+        prev.map((t) => t.id === draggedTask.id ? { ...t, status: draggedTask.status } : t),
+      );
+    });
     setDraggedTask(null);
   };
 
-  const handleDeleteTask = (taskId: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
-    if (selectedTask?.id === taskId) setSelectedTask(null);
+  const handleDeleteTask = async () => {
+    if (!taskToDelete) return;
+    const task = taskToDelete;
+    setTaskToDelete(null);
+    if (selectedTask?.id === task.id) setSelectedTask(null);
+    // Optimistic remove
+    setTasks((prev) => prev.filter((t) => t.id !== task.id));
+    try {
+      await projectApi.deleteTask(id, task.id);
+    } catch {
+      // Roll back
+      setTasks((prev) => [...prev, task]);
+    }
   };
 
-  const handleAddTask = () => {
+  const handleAddTask = async () => {
     if (!newTask.title.trim()) return;
-    const task: Task = {
-      id: Date.now().toString(),
+    // Optimistic local task
+    const optimistic: Task = {
+      id: `tmp-${Date.now()}`,
       title: newTask.title,
       description: newTask.description,
       status: "todo",
@@ -212,9 +242,23 @@ export default function ProjectDetailPage({
       createdAt: new Date().toISOString(),
       tags: [],
     };
-    setTasks((prev) => [...prev, task]);
+    setTasks((prev) => [optimistic, ...prev]);
     setNewTask({ title: "", description: "", phase: "development", priority: "medium", dueDate: "" });
     setIsNewTaskOpen(false);
+    try {
+      const saved = await projectApi.createTask(id, {
+        title: optimistic.title,
+        description: optimistic.description,
+        status: optimistic.status,
+        priority: optimistic.priority,
+        phase: optimistic.phase,
+        dueDate: optimistic.dueDate || undefined,
+      });
+      // Replace optimistic entry with real one
+      setTasks((prev) => prev.map((t) => t.id === optimistic.id ? saved : t));
+    } catch {
+      // Keep optimistic; it'll be lost on refresh but at least the user sees it
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -444,7 +488,7 @@ export default function ProjectDetailPage({
                                     className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleDeleteTask(task.id);
+                                      setTaskToDelete(task);
                                     }}
                                   >
                                     <X className="h-3.5 w-3.5" />
@@ -777,6 +821,22 @@ export default function ProjectDetailPage({
           </DialogContent>
         </Dialog>
 
+        {/* ── Delete Task Confirm ── */}
+        <Dialog open={!!taskToDelete} onOpenChange={(open) => { if (!open) setTaskToDelete(null); }}>
+          <DialogContent className="sm:max-w-100">
+            <DialogHeader>
+              <DialogTitle>Delete Task</DialogTitle>
+              <DialogDescription>
+                Delete <strong>{taskToDelete?.title}</strong>? This cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setTaskToDelete(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={handleDeleteTask}>Delete Task</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* ── Task Detail Sidebar ── */}
         {selectedTask && (
           <div className="fixed inset-y-0 right-0 w-[400px] bg-card border-l shadow-xl z-50">
@@ -788,7 +848,7 @@ export default function ProjectDetailPage({
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => handleDeleteTask(selectedTask.id)}
+                    onClick={() => setTaskToDelete(selectedTask)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
