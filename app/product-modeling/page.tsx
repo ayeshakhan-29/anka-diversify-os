@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { mockProjects, mockUsers } from "@/lib/mock-data"
+import { projects as mockProjects, users as mockUsers } from "@/lib/mock-data"
 import { 
   Search, Plus, Filter, Layers, FileText, Users, Calendar,
   Target, Lightbulb, PenTool, Workflow, BarChart3, CheckCircle2,

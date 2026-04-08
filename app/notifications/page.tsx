@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { mockUsers } from "@/lib/mock-data"
+import { users as mockUsers } from "@/lib/mock-data"
 import { 
   Bell, Check, CheckCheck, MessageSquare, GitBranch, FileText,
   UserPlus, AlertTriangle, Clock, Trash2, Settings, Filter,
