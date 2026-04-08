@@ -13,8 +13,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Forward request to backend
+    const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/auth/signup`,
+      `${apiUrl}/auth/signup`,
       {
         method: "POST",
         headers: {
