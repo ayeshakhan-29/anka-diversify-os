@@ -136,6 +136,8 @@ export default function ProjectDetailPage({
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [isAddFileOpen, setIsAddFileOpen] = useState(false);
   const [newFile, setNewFile] = useState({ name: "", type: "doc", phase: "development", url: "" });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileUploading, setFileUploading] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<ProjectFile | null>(null);
 
   useEffect(() => {
@@ -143,11 +145,14 @@ export default function ProjectDetailPage({
   }, [id]);
 
   const handleAddFile = async () => {
-    if (!newFile.name.trim()) return;
+    const name = selectedFile ? selectedFile.name : newFile.name.trim();
+    if (!name) return;
+
+    setFileUploading(true);
     const optimistic: ProjectFile = {
       id: `tmp-${Date.now()}`,
       projectId: id,
-      name: newFile.name,
+      name,
       type: newFile.type as ProjectFile["type"],
       phase: newFile.phase,
       url: newFile.url || undefined,
@@ -155,13 +160,22 @@ export default function ProjectDetailPage({
       updatedAt: new Date().toISOString(),
     };
     setFiles((prev) => [optimistic, ...prev]);
-    setNewFile({ name: "", type: "doc", phase: "development", url: "" });
     setIsAddFileOpen(false);
+
     try {
-      const saved = await projectApi.createFile(id, newFile);
+      let saved: ProjectFile;
+      if (selectedFile) {
+        saved = await projectApi.uploadFile(id, selectedFile, { phase: newFile.phase });
+      } else {
+        saved = await projectApi.createFile(id, newFile);
+      }
       setFiles((prev) => prev.map((f) => f.id === optimistic.id ? saved : f));
     } catch {
       setFiles((prev) => prev.filter((f) => f.id !== optimistic.id));
+    } finally {
+      setFileUploading(false);
+      setNewFile({ name: "", type: "doc", phase: "development", url: "" });
+      setSelectedFile(null);
     }
   };
 
@@ -920,15 +934,55 @@ export default function ProjectDetailPage({
               <DialogDescription>Add a deliverable or reference file to this project</DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-4 py-4">
+              {/* File upload area */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium">File Name</label>
-                <Input
-                  placeholder="e.g. Design Mockups v2"
-                  value={newFile.name}
-                  onChange={(e) => setNewFile((f) => ({ ...f, name: e.target.value }))}
-                />
+                <label className="text-sm font-medium">Upload File</label>
+                <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-lg p-6 cursor-pointer hover:border-primary/50 transition-colors">
+                  <Upload className="h-6 w-6 text-muted-foreground" />
+                  {selectedFile ? (
+                    <span className="text-sm font-medium text-primary">{selectedFile.name}</span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Click to choose a file</span>
+                  )}
+                  <span className="text-xs text-muted-foreground">PDF, DOC, DOCX, images up to 20MB</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.svg,.txt,.md,.csv"
+                    onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                  />
+                </label>
               </div>
+
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex-1 h-px bg-border" />
+                <span>or add by URL</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+
+              {!selectedFile && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">File Name</label>
+                  <Input
+                    placeholder="e.g. Design Mockups v2"
+                    value={newFile.name}
+                    onChange={(e) => setNewFile((f) => ({ ...f, name: e.target.value }))}
+                  />
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">Phase</label>
+                  <Select value={newFile.phase} onValueChange={(v) => setNewFile((f) => ({ ...f, phase: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="product-modeling">Product Modeling</SelectItem>
+                      <SelectItem value="development">Development</SelectItem>
+                      <SelectItem value="marketing">Marketing</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium">Type</label>
                   <Select value={newFile.type} onValueChange={(v) => setNewFile((f) => ({ ...f, type: v }))}>
@@ -943,31 +997,28 @@ export default function ProjectDetailPage({
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              {!selectedFile && (
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium">Phase</label>
-                  <Select value={newFile.phase} onValueChange={(v) => setNewFile((f) => ({ ...f, phase: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="product-modeling">Product Modeling</SelectItem>
-                      <SelectItem value="development">Development</SelectItem>
-                      <SelectItem value="marketing">Marketing</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <label className="text-sm font-medium">URL</label>
+                  <Input
+                    type="url"
+                    placeholder="https://..."
+                    value={newFile.url}
+                    onChange={(e) => setNewFile((f) => ({ ...f, url: e.target.value }))}
+                  />
                 </div>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium">URL (optional)</label>
-                <Input
-                  type="url"
-                  placeholder="https://..."
-                  value={newFile.url}
-                  onChange={(e) => setNewFile((f) => ({ ...f, url: e.target.value }))}
-                />
-              </div>
+              )}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddFileOpen(false)}>Cancel</Button>
-              <Button onClick={handleAddFile} disabled={!newFile.name.trim()}>Add File</Button>
+              <Button variant="outline" onClick={() => { setIsAddFileOpen(false); setSelectedFile(null); }}>Cancel</Button>
+              <Button
+                onClick={handleAddFile}
+                disabled={fileUploading || (!selectedFile && !newFile.name.trim())}
+              >
+                {fileUploading ? "Uploading…" : "Add File"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

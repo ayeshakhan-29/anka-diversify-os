@@ -183,6 +183,20 @@ export const projectApi = {
     return data as ProjectFile[];
   },
 
+  async uploadFile(projectId: string, file: File, opts: { phase?: string } = {}): Promise<ProjectFile> {
+    const form = new FormData();
+    form.append("file", file);
+    if (opts.phase) form.append("phase", opts.phase);
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/files/upload`, {
+      method: "POST",
+      headers: { "X-User-ID": DEMO_USER_ID }, // no Content-Type — browser sets multipart boundary
+      body: form,
+    });
+    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+    const { data } = await res.json();
+    return data as ProjectFile;
+  },
+
   async createFile(projectId: string, payload: {
     name: string;
     type?: string;
