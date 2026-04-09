@@ -104,7 +104,8 @@ class AIClient {
   private userId: string;
 
   constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/ai';
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    this.baseUrl = `${apiBase}/ai`;
     // In a real app, this would come from authentication
     this.userId = 'demo-user-id';
   }

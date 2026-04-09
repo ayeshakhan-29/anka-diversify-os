@@ -130,6 +130,19 @@ export interface Rule {
   createdAt: string;
 }
 
+export interface ProjectFile {
+  id: string;
+  projectId: string;
+  name: string;
+  type: "doc" | "image" | "spreadsheet" | "design" | "code" | "other";
+  phase: string;
+  url?: string;
+  size?: string;
+  uploadedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Department {
   id: string;
   name: string;

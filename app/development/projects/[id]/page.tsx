@@ -39,7 +39,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { projects as mockProjects, users } from "@/lib/mock-data";
 import { projectApi } from "@/lib/project-api";
-import type { Project, Task } from "@/lib/types";
+import type { Project, Task, ProjectFile } from "@/lib/types";
 import {
   ArrowLeft,
   Plus,
@@ -131,6 +131,51 @@ export default function ProjectDetailPage({
       .catch(() => setTasks(seedProject.tasks)) // fall back to mock tasks
       .finally(() => setTasksLoading(false));
   }, [id]);
+
+  // ── files state ──
+  const [files, setFiles] = useState<ProjectFile[]>([]);
+  const [isAddFileOpen, setIsAddFileOpen] = useState(false);
+  const [newFile, setNewFile] = useState({ name: "", type: "doc", phase: "development", url: "" });
+  const [fileToDelete, setFileToDelete] = useState<ProjectFile | null>(null);
+
+  useEffect(() => {
+    projectApi.getFiles(id).then(setFiles).catch(() => {});
+  }, [id]);
+
+  const handleAddFile = async () => {
+    if (!newFile.name.trim()) return;
+    const optimistic: ProjectFile = {
+      id: `tmp-${Date.now()}`,
+      projectId: id,
+      name: newFile.name,
+      type: newFile.type as ProjectFile["type"],
+      phase: newFile.phase,
+      url: newFile.url || undefined,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setFiles((prev) => [optimistic, ...prev]);
+    setNewFile({ name: "", type: "doc", phase: "development", url: "" });
+    setIsAddFileOpen(false);
+    try {
+      const saved = await projectApi.createFile(id, newFile);
+      setFiles((prev) => prev.map((f) => f.id === optimistic.id ? saved : f));
+    } catch {
+      setFiles((prev) => prev.filter((f) => f.id !== optimistic.id));
+    }
+  };
+
+  const handleDeleteFile = async () => {
+    if (!fileToDelete) return;
+    const file = fileToDelete;
+    setFileToDelete(null);
+    setFiles((prev) => prev.filter((f) => f.id !== file.id));
+    try {
+      await projectApi.deleteFile(id, file.id);
+    } catch {
+      setFiles((prev) => [file, ...prev]);
+    }
+  };
 
   // ── kanban state ──
   const [phaseFilter, setPhaseFilter] = useState("all");

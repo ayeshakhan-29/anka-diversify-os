@@ -1,4 +1,4 @@
-import type { Project, Task } from "./types";
+import type { Project, Task, ProjectFile } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 const DEMO_USER_ID = "demo-user-id";
@@ -172,5 +172,39 @@ export const projectApi = {
       headers,
       body: JSON.stringify({ githubUrl }),
     });
+  },
+
+  // ── Files ──────────────────────────────────────────────────────────────────
+
+  async getFiles(projectId: string): Promise<ProjectFile[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/files`, { headers });
+    if (!res.ok) throw new Error(`GET files failed: ${res.status}`);
+    const { data } = await res.json();
+    return data as ProjectFile[];
+  },
+
+  async createFile(projectId: string, payload: {
+    name: string;
+    type?: string;
+    phase?: string;
+    url?: string;
+    size?: string;
+  }): Promise<ProjectFile> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/files`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`POST file failed: ${res.status}`);
+    const { data } = await res.json();
+    return data as ProjectFile;
+  },
+
+  async deleteFile(projectId: string, fileId: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/files/${fileId}`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!res.ok) throw new Error(`DELETE file failed: ${res.status}`);
   },
 };
