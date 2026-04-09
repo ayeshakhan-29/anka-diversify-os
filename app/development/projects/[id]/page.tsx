@@ -592,42 +592,72 @@ export default function ProjectDetailPage({
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-lg font-semibold">Files & Deliverables</h2>
-                  <Button className="gap-2">
+                  <Button className="gap-2" onClick={() => setIsAddFileOpen(true)}>
                     <Upload className="h-4 w-4" />
-                    Upload File
+                    Add File
                   </Button>
                 </div>
-                {["product-modeling", "development", "marketing"].map((phase) => (
-                  <div key={phase} className="mb-8">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Badge variant="outline" className={phaseColors[phase]}>{phaseLabels[phase]}</Badge>
-                      <span className="text-sm text-muted-foreground">Phase Deliverables</span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-4">
-                      {[
-                        { i: 1, Icon: FileText },
-                        { i: 2, Icon: Image },
-                        { i: 3, Icon: File },
-                      ].map(({ i, Icon }) => (
-                        <Card key={i} className="group hover:border-primary/50 transition-all cursor-pointer">
-                          <CardContent className="p-4">
-                            <div className="aspect-video bg-muted rounded-lg flex items-center justify-center mb-3">
-                              <Icon className="h-8 w-8 text-muted-foreground" />
-                            </div>
-                            <p className="font-medium text-sm truncate">Deliverable {i}</p>
-                            <p className="text-xs text-muted-foreground mt-1">Updated 2 days ago</p>
-                          </CardContent>
-                        </Card>
-                      ))}
-                      <Card className="border-dashed hover:border-primary/50 transition-all cursor-pointer">
-                        <CardContent className="p-4 h-full flex flex-col items-center justify-center text-muted-foreground">
-                          <Plus className="h-8 w-8 mb-2" />
-                          <span className="text-sm">Add File</span>
-                        </CardContent>
-                      </Card>
-                    </div>
+                {files.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                    <File className="h-12 w-12 mb-4 opacity-30" />
+                    <p className="text-sm">No files yet. Add your first deliverable.</p>
                   </div>
-                ))}
+                ) : (
+                  ["product-modeling", "development", "marketing"].map((phase) => {
+                    const phaseFiles = files.filter((f) => f.phase === phase);
+                    if (phaseFiles.length === 0) return null;
+                    return (
+                      <div key={phase} className="mb-8">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Badge variant="outline" className={phaseColors[phase]}>{phaseLabels[phase]}</Badge>
+                          <span className="text-sm text-muted-foreground">Phase Deliverables</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-4">
+                          {phaseFiles.map((file) => {
+                            const Icon = file.type === "image" ? Image
+                              : file.type === "code" ? FileText
+                              : File;
+                            return (
+                              <Card key={file.id} className="group hover:border-primary/50 transition-all relative">
+                                <CardContent className="p-4">
+                                  <button
+                                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                                    onClick={() => setFileToDelete(file)}
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                  <div className="aspect-video bg-muted rounded-lg flex items-center justify-center mb-3">
+                                    {file.url ? (
+                                      <a href={file.url} target="_blank" rel="noreferrer" className="flex items-center justify-center w-full h-full">
+                                        <Icon className="h-8 w-8 text-muted-foreground" />
+                                      </a>
+                                    ) : (
+                                      <Icon className="h-8 w-8 text-muted-foreground" />
+                                    )}
+                                  </div>
+                                  <p className="font-medium text-sm truncate">{file.name}</p>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {new Date(file.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                    {file.size && ` · ${file.size}`}
+                                  </p>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                          <Card
+                            className="border-dashed hover:border-primary/50 transition-all cursor-pointer"
+                            onClick={() => { setNewFile((f) => ({ ...f, phase })); setIsAddFileOpen(true); }}
+                          >
+                            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-muted-foreground">
+                              <Plus className="h-8 w-8 mb-2" />
+                              <span className="text-sm">Add File</span>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </TabsContent>
 
@@ -878,6 +908,82 @@ export default function ProjectDetailPage({
             <DialogFooter>
               <Button variant="outline" onClick={() => setTaskToDelete(null)}>Cancel</Button>
               <Button variant="destructive" onClick={handleDeleteTask}>Delete Task</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Add File Dialog ── */}
+        <Dialog open={isAddFileOpen} onOpenChange={setIsAddFileOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add File</DialogTitle>
+              <DialogDescription>Add a deliverable or reference file to this project</DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-4 py-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">File Name</label>
+                <Input
+                  placeholder="e.g. Design Mockups v2"
+                  value={newFile.name}
+                  onChange={(e) => setNewFile((f) => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">Type</label>
+                  <Select value={newFile.type} onValueChange={(v) => setNewFile((f) => ({ ...f, type: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="doc">Document</SelectItem>
+                      <SelectItem value="image">Image</SelectItem>
+                      <SelectItem value="spreadsheet">Spreadsheet</SelectItem>
+                      <SelectItem value="design">Design</SelectItem>
+                      <SelectItem value="code">Code</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">Phase</label>
+                  <Select value={newFile.phase} onValueChange={(v) => setNewFile((f) => ({ ...f, phase: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="product-modeling">Product Modeling</SelectItem>
+                      <SelectItem value="development">Development</SelectItem>
+                      <SelectItem value="marketing">Marketing</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">URL (optional)</label>
+                <Input
+                  type="url"
+                  placeholder="https://..."
+                  value={newFile.url}
+                  onChange={(e) => setNewFile((f) => ({ ...f, url: e.target.value }))}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAddFileOpen(false)}>Cancel</Button>
+              <Button onClick={handleAddFile} disabled={!newFile.name.trim()}>Add File</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Delete File Confirm ── */}
+        <Dialog open={!!fileToDelete} onOpenChange={(open) => { if (!open) setFileToDelete(null); }}>
+          <DialogContent className="sm:max-w-100">
+            <DialogHeader>
+              <DialogTitle>Delete File</DialogTitle>
+              <DialogDescription>
+                Delete <strong>{fileToDelete?.name}</strong>? This cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setFileToDelete(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={handleDeleteFile}>Delete File</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
