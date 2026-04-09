@@ -184,16 +184,40 @@ export const projectApi = {
   },
 
   async uploadFile(projectId: string, file: File, opts: { phase?: string } = {}): Promise<ProjectFile> {
-    const form = new FormData();
-    form.append("file", file);
-    if (opts.phase) form.append("phase", opts.phase);
-    const res = await fetch(`${BASE_URL}/projects/${projectId}/files/upload`, {
+    // Step 1: get presigned S3 URL
+    const presignRes = await fetch(`${BASE_URL}/projects/${projectId}/files/presign`, {
       method: "POST",
-      headers: { "X-User-ID": DEMO_USER_ID }, // no Content-Type — browser sets multipart boundary
-      body: form,
+      headers,
+      body: JSON.stringify({ filename: file.name, mimetype: file.type, phase: opts.phase }),
     });
-    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-    const { data } = await res.json();
+    if (!presignRes.ok) throw new Error(`Presign failed: ${presignRes.status}`);
+    const { data: { uploadUrl, fileUrl, key, type } } = await presignRes.json();
+
+    // Step 2: upload directly to S3 (no auth headers — presigned URL handles it)
+    const s3Res = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+    if (!s3Res.ok) throw new Error(`S3 upload failed: ${s3Res.status}`);
+
+    // Step 3: confirm in DB
+    const confirmRes = await fetch(`${BASE_URL}/projects/${projectId}/files/confirm`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: file.name,
+        type,
+        phase: opts.phase || "development",
+        url: fileUrl,
+        s3Key: key,
+        size: file.size < 1024 ? `${file.size} B`
+          : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB`
+          : `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+      }),
+    });
+    if (!confirmRes.ok) throw new Error(`Confirm failed: ${confirmRes.status}`);
+    const { data } = await confirmRes.json();
     return data as ProjectFile;
   },
 
