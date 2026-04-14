@@ -1,380 +1,395 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { MainLayout } from "@/components/layout/main-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { useState, useEffect } from "react";
+import { MainLayout } from "@/components/layout/main-layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+  Dialog, DialogContent, DialogDescription,
+  DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
-import {
-  Search,
-  Plus,
-  MoreHorizontal,
-  Filter,
-  Download,
-  UserPlus,
-  Edit,
-  Trash2,
-  Shield,
-  Mail,
-} from "lucide-react"
-import { users } from "@/lib/mock-data"
-import { cn } from "@/lib/utils"
-import type { User } from "@/lib/types"
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Search, Plus, MoreHorizontal, Trash2, Link2, Copy, Check, UserPlus, Clock } from "lucide-react";
+import { inviteApi, type TeamUser, type InviteRecord } from "@/lib/invite-api";
 
-const roleColors = {
+const roleColors: Record<string, string> = {
   admin: "bg-destructive/20 text-destructive",
   manager: "bg-primary/20 text-primary",
-  developer: "bg-accent/20 text-accent",
+  developer: "bg-accent/20 text-accent-foreground",
   designer: "bg-chart-4/20 text-chart-4",
-  viewer: "bg-muted text-muted-foreground",
-}
+  tester: "bg-warning/20 text-warning",
+  user: "bg-muted text-muted-foreground",
+};
 
-const statusColors = {
+const statusColors: Record<string, string> = {
   active: "bg-success/20 text-success",
+  invited: "bg-warning/20 text-warning",
   inactive: "bg-muted text-muted-foreground",
-  suspended: "bg-destructive/20 text-destructive",
-}
+};
 
-function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  })
-}
-
-function formatLastActive(dateString: string) {
-  const date = new Date(dateString)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const hours = Math.floor(diff / 3600000)
-  
-  if (hours < 1) return "Just now"
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}d ago`
-  return formatDate(dateString)
-}
-
-function UserRow({ user }: { user: User }) {
-  return (
-    <tr className="border-b border-border hover:bg-secondary/30 transition-colors">
-      <td className="py-4 px-4">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-10 w-10">
-            <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-              {user.name.split(" ").map((n) => n[0]).join("")}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <p className="font-medium text-foreground">{user.name}</p>
-            <p className="text-sm text-muted-foreground">{user.email}</p>
-          </div>
-        </div>
-      </td>
-      <td className="py-4 px-4">
-        <Badge className={cn("text-xs capitalize", roleColors[user.role])}>
-          {user.role}
-        </Badge>
-      </td>
-      <td className="py-4 px-4">
-        <span className="text-sm text-muted-foreground">{user.department}</span>
-      </td>
-      <td className="py-4 px-4">
-        <Badge className={cn("text-xs capitalize", statusColors[user.status])}>
-          {user.status}
-        </Badge>
-      </td>
-      <td className="py-4 px-4">
-        <span className="text-sm text-muted-foreground">{formatLastActive(user.lastActive)}</span>
-      </td>
-      <td className="py-4 px-4">
-        <span className="text-sm text-muted-foreground">{formatDate(user.createdAt)}</span>
-      </td>
-      <td className="py-4 px-4">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <Edit className="h-4 w-4 mr-2" />
-              Edit User
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Mail className="h-4 w-4 mr-2" />
-              Send Email
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Shield className="h-4 w-4 mr-2" />
-              Change Role
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete User
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </td>
-    </tr>
-  )
-}
+const ROLES = ["developer", "designer", "tester", "manager", "admin"];
+const DEPARTMENTS = ["development", "testing", "design", "management", "marketing"];
 
 export default function UsersPage() {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [roleFilter, setRoleFilter] = useState<string>("all")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [users, setUsers] = useState<TeamUser[]>([]);
+  const [invites, setInvites] = useState<InviteRecord[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesRole = roleFilter === "all" || user.role === roleFilter
-    const matchesStatus = statusFilter === "all" || user.status === statusFilter
-    return matchesSearch && matchesRole && matchesStatus
-  })
+  // Invite dialog
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ email: "", role: "developer", department: "development" });
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [createdLink, setCreatedLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  const activeCount = users.filter((u) => u.status === "active").length
-  const adminCount = users.filter((u) => u.role === "admin").length
+  // Remove user dialog
+  const [userToRemove, setUserToRemove] = useState<TeamUser | null>(null);
+
+  useEffect(() => {
+    Promise.all([inviteApi.listUsers(), inviteApi.listInvites()])
+      .then(([u, i]) => { setUsers(u); setInvites(i); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleInvite = async () => {
+    if (!inviteForm.email) return;
+    setInviting(true);
+    setInviteError(null);
+    try {
+      const result = await inviteApi.createInvite(inviteForm);
+      setCreatedLink(result.inviteLink);
+      setInvites((prev) => [result as any, ...prev]);
+    } catch (e: any) {
+      setInviteError(e.message);
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleCopyLink = (link: string) => {
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleRevokeInvite = async (id: string) => {
+    await inviteApi.revokeInvite(id).catch(() => {});
+    setInvites((prev) => prev.filter((i) => i.id !== id));
+  };
+
+  const handleRemoveUser = async () => {
+    if (!userToRemove) return;
+    await inviteApi.removeUser(userToRemove.id).catch(() => {});
+    setUsers((prev) => prev.filter((u) => u.id !== userToRemove.id));
+    setUserToRemove(null);
+  };
+
+  const filtered = users.filter((u) =>
+    search === "" ||
+    u.email.toLowerCase().includes(search.toLowerCase()) ||
+    (u.name || "").toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const pendingInvites = invites.filter((i) => !i.acceptedAt);
 
   return (
-    <MainLayout breadcrumb={["Admin", "Users"]}>
-      <div className="space-y-6">
-        {/* Stats */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Card className="bg-card border-border">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Users</p>
-                  <p className="text-2xl font-semibold text-foreground">{users.length}</p>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <UserPlus className="h-5 w-5 text-primary" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Active Users</p>
-                  <p className="text-2xl font-semibold text-foreground">{activeCount}</p>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/10">
-                  <div className="h-3 w-3 rounded-full bg-success" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Administrators</p>
-                  <p className="text-2xl font-semibold text-foreground">{adminCount}</p>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
-                  <Shield className="h-5 w-5 text-destructive" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+    <MainLayout>
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Team Members</h1>
+            <p className="text-muted-foreground text-sm">Manage your team and send invitations</p>
+          </div>
+          <Button className="gap-2" onClick={() => { setIsInviteOpen(true); setCreatedLink(null); setInviteError(null); }}>
+            <UserPlus className="h-4 w-4" />
+            Invite Member
+          </Button>
         </div>
 
-        {/* Users Table */}
-        <Card className="bg-card border-border">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-            <CardTitle className="text-lg font-semibold text-foreground">
-              User Management
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add User
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add New User</DialogTitle>
-                    <DialogDescription>
-                      Create a new user account. An invitation email will be sent.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Full Name</Label>
-                      <Input id="name" placeholder="Enter full name" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input id="email" type="email" placeholder="Enter email address" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Role</Label>
-                        <Select>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="admin">Admin</SelectItem>
-                            <SelectItem value="manager">Manager</SelectItem>
-                            <SelectItem value="developer">Developer</SelectItem>
-                            <SelectItem value="designer">Designer</SelectItem>
-                            <SelectItem value="viewer">Viewer</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Department</Label>
-                        <Select>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select department" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="development">Development</SelectItem>
-                            <SelectItem value="design">Design</SelectItem>
-                            <SelectItem value="product">Product</SelectItem>
-                            <SelectItem value="marketing">Marketing</SelectItem>
-                            <SelectItem value="sales">Sales</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline">Cancel</Button>
-                    <Button>Send Invitation</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {/* Filters */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search users..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Select value={roleFilter} onValueChange={setRoleFilter}>
-                  <SelectTrigger className="w-32">
-                    <Filter className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="Role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Roles</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="developer">Developer</SelectItem>
-                    <SelectItem value="designer">Designer</SelectItem>
-                    <SelectItem value="viewer">Viewer</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="suspended">Suspended</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full">
-                <thead className="bg-secondary/50">
-                  <tr>
-                    <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground">
-                      User
-                    </th>
-                    <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground">
-                      Role
-                    </th>
-                    <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground">
-                      Department
-                    </th>
-                    <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground">
-                      Status
-                    </th>
-                    <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground">
-                      Last Active
-                    </th>
-                    <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground">
-                      Created
-                    </th>
-                    <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((user) => (
-                    <UserRow key={user.id} user={user} />
-                  ))}
-                </tbody>
-              </table>
-              {filteredUsers.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                  <UserPlus className="h-12 w-12 mb-3 opacity-50" />
-                  <p className="text-sm">No users found</p>
-                </div>
+        <Tabs defaultValue="members">
+          <TabsList>
+            <TabsTrigger value="members">Members ({users.length})</TabsTrigger>
+            <TabsTrigger value="invites">
+              Pending Invites
+              {pendingInvites.length > 0 && (
+                <span className="ml-2 bg-warning text-warning-foreground text-xs px-1.5 py-0.5 rounded-full">
+                  {pendingInvites.length}
+                </span>
               )}
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ── Members tab ── */}
+          <TabsContent value="members" className="mt-4">
+            <div className="mb-4 relative max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search members..."
+                className="pl-10"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardContent className="p-0">
+                {loading ? (
+                  <div className="p-8 text-center text-muted-foreground text-sm">Loading...</div>
+                ) : filtered.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground text-sm">No members yet. Invite your first team member.</div>
+                ) : (
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-xs text-muted-foreground">
+                        <th className="text-left py-3 px-4 font-medium">Member</th>
+                        <th className="text-left py-3 px-4 font-medium">Role</th>
+                        <th className="text-left py-3 px-4 font-medium">Department</th>
+                        <th className="text-left py-3 px-4 font-medium">Status</th>
+                        <th className="text-left py-3 px-4 font-medium">Joined</th>
+                        <th className="py-3 px-4" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((user) => (
+                        <tr key={user.id} className="border-b hover:bg-muted/30 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback className="text-xs">
+                                  {(user.name || user.email).slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="text-sm font-medium">{user.name || "—"}</p>
+                                <p className="text-xs text-muted-foreground">{user.email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge variant="outline" className={roleColors[user.role] || ""}>
+                              {user.role}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="text-sm capitalize">{user.department || "—"}</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge variant="outline" className={statusColors[user.status] || ""}>
+                              {user.status}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-muted-foreground">
+                            {new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          </td>
+                          <td className="py-3 px-4">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={() => setUserToRemove(user)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" /> Remove
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── Pending invites tab ── */}
+          <TabsContent value="invites" className="mt-4">
+            <Card>
+              <CardContent className="p-0">
+                {pendingInvites.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground text-sm">No pending invites.</div>
+                ) : (
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-xs text-muted-foreground">
+                        <th className="text-left py-3 px-4 font-medium">Email</th>
+                        <th className="text-left py-3 px-4 font-medium">Role</th>
+                        <th className="text-left py-3 px-4 font-medium">Department</th>
+                        <th className="text-left py-3 px-4 font-medium">Expires</th>
+                        <th className="py-3 px-4" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingInvites.map((invite) => (
+                        <tr key={invite.id} className="border-b hover:bg-muted/30 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-warning" />
+                              <span className="text-sm">{invite.email}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge variant="outline" className={roleColors[invite.role] || ""}>
+                              {invite.role}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 text-sm capitalize">{invite.department || "—"}</td>
+                          <td className="py-3 px-4 text-sm text-muted-foreground">
+                            {new Date(invite.expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-1 justify-end">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                title="Copy invite link"
+                                onClick={() => handleCopyLink(`${window.location.origin}/invite/${invite.token}`)}
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                title="Revoke invite"
+                                onClick={() => handleRevokeInvite(invite.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
+
+      {/* ── Invite Dialog ── */}
+      <Dialog open={isInviteOpen} onOpenChange={(o) => { if (!o) { setIsInviteOpen(false); setCreatedLink(null); } }}>
+        <DialogContent className="sm:max-w-125">
+          <DialogHeader>
+            <DialogTitle>Invite Team Member</DialogTitle>
+            <DialogDescription>Generate an invite link to share with your team member.</DialogDescription>
+          </DialogHeader>
+
+          {!createdLink ? (
+            <>
+              <div className="flex flex-col gap-4 py-2">
+                {inviteError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{inviteError}</AlertDescription>
+                  </Alert>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">Email</label>
+                  <Input
+                    type="email"
+                    placeholder="colleague@company.com"
+                    value={inviteForm.email}
+                    onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium">Role</label>
+                    <Select value={inviteForm.role} onValueChange={(v) => setInviteForm((f) => ({ ...f, role: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ROLES.map((r) => (
+                          <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium">Department</label>
+                    <Select value={inviteForm.department} onValueChange={(v) => setInviteForm((f) => ({ ...f, department: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {DEPARTMENTS.map((d) => (
+                          <SelectItem key={d} value={d} className="capitalize">{d}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsInviteOpen(false)}>Cancel</Button>
+                <Button onClick={handleInvite} disabled={inviting || !inviteForm.email}>
+                  {inviting ? "Generating…" : "Generate Invite Link"}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <div className="flex flex-col gap-4 py-2">
+              <div className="flex items-center gap-2 p-3 bg-success/10 border border-success/20 rounded-lg">
+                <Check className="h-4 w-4 text-success shrink-0" />
+                <p className="text-sm text-success">Invite link generated! Share it with your team member.</p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">Invite Link</label>
+                <div className="flex gap-2">
+                  <Input value={createdLink} readOnly className="text-xs text-muted-foreground" />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={() => handleCopyLink(createdLink)}
+                  >
+                    {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Link expires in 7 days. Share via Slack, email, or any messenger.</p>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => { setIsInviteOpen(false); setCreatedLink(null); }}>Done</Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Remove user confirm ── */}
+      <Dialog open={!!userToRemove} onOpenChange={(o) => { if (!o) setUserToRemove(null); }}>
+        <DialogContent className="sm:max-w-100">
+          <DialogHeader>
+            <DialogTitle>Remove Member</DialogTitle>
+            <DialogDescription>
+              Remove <strong>{userToRemove?.name || userToRemove?.email}</strong> from the team? They will lose access immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUserToRemove(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleRemoveUser}>Remove</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
-  )
+  );
 }
