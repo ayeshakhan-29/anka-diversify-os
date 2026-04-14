@@ -1,4 +1,4 @@
-import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage } from "./types";
+import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
@@ -55,8 +55,17 @@ function mapProject(p: any): Project {
     githubUrl: p.githubUrl || undefined,
     startDate: p.startDate ? new Date(p.startDate).toISOString() : new Date().toISOString(),
     dueDate: p.dueDate ? new Date(p.dueDate).toISOString() : new Date().toISOString(),
-    team: [],   // populated from mock-data elsewhere if needed
+    team: [],
     tasks: (p.tasks || []).map((t: any) => mapTask(t, p.id)),
+    members: (p.members || []).map((m: any) => ({
+      id: m.user?.id || m.userId,
+      name: m.user?.name,
+      email: m.user?.email || "",
+      role: m.user?.role || "user",
+      department: m.user?.department,
+      status: m.user?.status || "active",
+      joinedAt: m.joinedAt,
+    })) as ProjectMember[],
   };
 }
 
@@ -253,6 +262,35 @@ export const projectApi = {
       headers: getHeaders(),
     });
     if (!res.ok) throw new Error(`DELETE file failed: ${res.status}`);
+  },
+
+  // ── Members ────────────────────────────────────────────────────────────────
+
+  async getMembers(projectId: string): Promise<ProjectMember[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/members`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET members failed: ${res.status}`);
+    const { data } = await res.json();
+    return data as ProjectMember[];
+  },
+
+  async addMember(projectId: string, userId: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/members`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ userId }),
+    });
+    if (!res.ok) {
+      const json = await res.json();
+      throw new Error(json.error || "Failed to add member");
+    }
+  },
+
+  async removeMember(projectId: string, userId: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/members/${userId}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Failed to remove member");
   },
 
   // ── Chat ───────────────────────────────────────────────────────────────────

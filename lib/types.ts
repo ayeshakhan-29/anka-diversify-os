@@ -12,6 +12,7 @@ export interface Project {
   phase: ProjectPhase;
   progress: number;
   team: TeamMember[];
+  members: ProjectMember[];
   startDate: string;
   dueDate: string;
   tasks: Task[];
@@ -141,6 +142,16 @@ export interface ProjectFile {
   uploadedBy?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProjectMember {
+  id: string;
+  name?: string;
+  email: string;
+  role: string;
+  department?: string;
+  status: string;
+  joinedAt: string;
 }
 
 export interface Activity {

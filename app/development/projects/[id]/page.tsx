@@ -39,7 +39,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { projects as mockProjects } from "@/lib/mock-data";
 import { projectApi } from "@/lib/project-api";
-import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage } from "@/lib/types";
+import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember } from "@/lib/types";
+import { inviteApi } from "@/lib/invite-api";
+import type { TeamUser } from "@/lib/invite-api";
 import {
   ArrowLeft,
   Plus,
@@ -63,6 +65,7 @@ import {
   Link2,
   Send,
   X,
+  UserPlus,
 } from "lucide-react";
 import Link from "next/link";
 import { Image } from "lucide-react";
@@ -188,6 +191,38 @@ export default function ProjectDetailPage({
     } catch {
       setFiles((prev) => [file, ...prev]);
     }
+  };
+
+  // ── members state ──
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [allUsers, setAllUsers] = useState<TeamUser[]>([]);
+  const [memberLoading, setMemberLoading] = useState(false);
+  const [memberError, setMemberError] = useState<string | null>(null);
+
+  useEffect(() => {
+    projectApi.getMembers(id).then(setMembers).catch(() => {});
+    inviteApi.listUsers().then(setAllUsers).catch(() => {});
+  }, [id]);
+
+  const handleAddMember = async (userId: string) => {
+    setMemberLoading(true);
+    setMemberError(null);
+    try {
+      await projectApi.addMember(id, userId);
+      const updated = await projectApi.getMembers(id);
+      setMembers(updated);
+    } catch (e: any) {
+      setMemberError(e.message);
+    } finally {
+      setMemberLoading(false);
+    }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    try {
+      await projectApi.removeMember(id, userId);
+      setMembers((prev) => prev.filter((m) => m.id !== userId));
+    } catch { /* silent */ }
   };
 
   // ── activities state ──
@@ -320,7 +355,7 @@ export default function ProjectDetailPage({
   }, [project.id, project.name]);
 
   // ── derived ──
-  const teamMembers = project.team;
+
   const filteredTasks = tasks.filter(
     (t) => phaseFilter === "all" || t.phase === phaseFilter,
   );
@@ -502,18 +537,17 @@ export default function ProjectDetailPage({
 
             {/* Stats bar */}
             <div className="flex items-center gap-6">
-              {teamMembers.length > 0 && (
+              {members.length > 0 && (
                 <>
                   <div className="flex items-center gap-2">
                     <div className="flex items-center -space-x-2">
-                      {teamMembers.slice(0, 4).map((member) => (
+                      {members.slice(0, 4).map((member) => (
                         <Avatar key={member.id} className="h-7 w-7 border-2 border-background">
-                          <AvatarImage src={member.avatar} />
-                          <AvatarFallback className="text-xs">{member.name.slice(0, 2)}</AvatarFallback>
+                          <AvatarFallback className="text-xs">{(member.name || member.email).slice(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
                       ))}
                     </div>
-                    <span className="text-sm text-muted-foreground">{teamMembers.length} members</span>
+                    <span className="text-sm text-muted-foreground">{members.length} member{members.length !== 1 ? "s" : ""}</span>
                   </div>
                   <div className="h-4 w-px bg-border" />
                 </>
@@ -912,6 +946,60 @@ export default function ProjectDetailPage({
                   value={editForm.githubUrl}
                   onChange={(e) => setEditForm((f) => ({ ...f, githubUrl: e.target.value }))}
                 />
+              </div>
+
+              {/* ── Team Members ── */}
+              <div className="flex flex-col gap-2 pt-2 border-t">
+                <label className="text-sm font-medium">Team Members</label>
+
+                {/* Current members */}
+                <div className="space-y-1.5">
+                  {members.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No members yet.</p>
+                  ) : (
+                    members.map((m) => (
+                      <div key={m.id} className="flex items-center justify-between gap-2 p-1.5 rounded-md hover:bg-muted/50">
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-6 w-6">
+                            <AvatarFallback className="text-xs">{(m.name || m.email).slice(0, 2).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="text-xs font-medium">{m.name || m.email}</p>
+                            <p className="text-xs text-muted-foreground capitalize">{m.role}</p>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => handleRemoveMember(m.id)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Add member */}
+                <div className="flex gap-2">
+                  <Select
+                    onValueChange={(userId) => handleAddMember(userId)}
+                    disabled={memberLoading}
+                  >
+                    <SelectTrigger className="flex-1 h-8 text-xs">
+                      <SelectValue placeholder="Add a team member…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allUsers
+                        .filter((u) => !members.some((m) => m.id === u.id))
+                        .map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            <span className="text-xs">{u.name || u.email} <span className="text-muted-foreground capitalize">· {u.role}</span></span>
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="icon" className="h-8 w-8 shrink-0" variant="outline" disabled>
+                    <UserPlus className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                {memberError && <p className="text-xs text-destructive">{memberError}</p>}
               </div>
             </div>
             <DialogFooter>
