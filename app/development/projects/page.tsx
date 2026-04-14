@@ -41,7 +41,7 @@ export default function ProjectsPage() {
     projectApi
       .getAll()
       .then((backendProjects) => setProjectsList(backendProjects))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, []);
 

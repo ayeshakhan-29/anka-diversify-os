@@ -101,20 +101,31 @@ export interface ProjectContext {
 
 class AIClient {
   private baseUrl: string;
-  private userId: string;
 
   constructor() {
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
     this.baseUrl = `${apiBase}/ai`;
-    // In a real app, this would come from authentication
-    this.userId = 'demo-user-id';
+  }
+
+  private getHeaders(): Record<string, string> {
+    if (typeof window === 'undefined') {
+      return { 'Content-Type': 'application/json', 'X-User-ID': 'demo-user-id' };
+    }
+    const token = localStorage.getItem('authToken');
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    return {
+      'Content-Type': 'application/json',
+      'X-User-ID': user?.id || 'demo-user-id',
+      'X-User-Name': user?.name || 'Demo User',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = {
-      'Content-Type': 'application/json',
-      'X-User-ID': this.userId,
+      ...this.getHeaders(),
       ...options.headers,
     };
 
@@ -172,14 +183,6 @@ class AIClient {
     return this.request<ProjectContext>(`/projects/${projectId}/context`);
   }
 
-  // Utility Methods
-  setUserId(userId: string): void {
-    this.userId = userId;
-  }
-
-  getUserId(): string {
-    return this.userId;
-  }
 }
 
 export const aiClient = new AIClient();

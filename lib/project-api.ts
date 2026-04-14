@@ -185,11 +185,28 @@ export const projectApi = {
   },
 
   async syncGithub(projectId: string, githubUrl: string): Promise<void> {
-    await fetch(`${BASE_URL}/projects/${projectId}/sync-github`, {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/sync-github`, {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({ githubUrl }),
     });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      throw new Error(json.error || `Sync failed: ${res.status}`);
+    }
+  },
+
+  async getRepoSnapshot(projectId: string): Promise<{ repoName: string; fileTree: string[]; lastSyncedAt: string } | null> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}`, { headers: getHeaders() });
+    if (!res.ok) return null;
+    const { data } = await res.json();
+    const snap = data.repoSnapshot;
+    if (!snap) return null;
+    return {
+      repoName: snap.repoName,
+      lastSyncedAt: snap.lastSyncedAt,
+      fileTree: typeof snap.fileTree === "string" ? JSON.parse(snap.fileTree) : (snap.fileTree ?? []),
+    };
   },
 
   // ── Files ──────────────────────────────────────────────────────────────────

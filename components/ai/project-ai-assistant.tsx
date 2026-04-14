@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import {
   Bot,
   Send,
@@ -18,9 +18,14 @@ import {
   Lightbulb,
   Copy,
   Check,
+  Github,
+  RefreshCw,
+  FolderOpen,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { AIService } from "@/lib/ai-service";
+import { projectApi } from "@/lib/project-api";
 import type { Project } from "@/lib/types";
 
 interface Message {
@@ -59,6 +64,37 @@ export function ProjectAIAssistant({ project }: ProjectAIAssistantProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // GitHub repo state
+  const [githubUrl, setGithubUrl] = useState(project.githubUrl || "");
+  const [repoSnapshot, setRepoSnapshot] = useState<{ repoName: string; fileTree: string[]; lastSyncedAt: string } | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  useEffect(() => {
+    projectApi.getRepoSnapshot(project.id).then((snap) => {
+      if (snap) setRepoSnapshot(snap);
+    });
+  }, [project.id]);
+
+  const handleSync = async () => {
+    if (!githubUrl.trim()) return;
+    setIsSyncing(true);
+    setSyncError(null);
+    try {
+      await projectApi.syncGithub(project.id, githubUrl.trim());
+      // Also update the project's githubUrl if it changed
+      if (githubUrl.trim() !== project.githubUrl) {
+        await projectApi.update(project.id, { githubUrl: githubUrl.trim() });
+      }
+      const snap = await projectApi.getRepoSnapshot(project.id);
+      if (snap) setRepoSnapshot(snap);
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   useEffect(() => {
     const history = AIService.getChatHistory(contextId);
@@ -167,7 +203,7 @@ export function ProjectAIAssistant({ project }: ProjectAIAssistantProps) {
           </div>
         </CardHeader>
 
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+        <div className="flex-1 min-h-0 overflow-y-auto p-4" ref={scrollRef}>
           <div className="space-y-4">
             {messages.map((message) => (
               <div
@@ -249,7 +285,7 @@ export function ProjectAIAssistant({ project }: ProjectAIAssistantProps) {
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         <div className="border-t p-3 shrink-0">
           <div className="flex gap-2">
@@ -258,7 +294,7 @@ export function ProjectAIAssistant({ project }: ProjectAIAssistantProps) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="min-h-[60px] resize-none"
+              className="min-h-15 resize-none"
               disabled={isLoading}
             />
             <Button
@@ -273,7 +309,63 @@ export function ProjectAIAssistant({ project }: ProjectAIAssistantProps) {
       </Card>
 
       {/* Sidebar */}
-      <div className="w-64 space-y-3 shrink-0 hidden lg:flex lg:flex-col">
+      <div className="w-64 space-y-3 shrink-0 hidden lg:flex lg:flex-col overflow-y-auto">
+        {/* GitHub Repository */}
+        <Card>
+          <CardHeader className="pb-2 pt-3 px-3">
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+              <Github className="h-3 w-3" />
+              Repository
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3 space-y-2">
+            {repoSnapshot ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-xs text-green-500">
+                  <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-medium truncate">{repoSnapshot.repoName}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {repoSnapshot.fileTree.length} files indexed
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Synced {new Date(repoSnapshot.lastSyncedAt).toLocaleDateString()}
+                </p>
+                <div className="flex gap-1.5">
+                  <Input
+                    value={githubUrl}
+                    onChange={(e) => setGithubUrl(e.target.value)}
+                    placeholder="github.com/owner/repo"
+                    className="h-7 text-xs"
+                  />
+                  <Button size="sm" variant="outline" className="h-7 px-2 shrink-0" onClick={handleSync} disabled={isSyncing}>
+                    <RefreshCw className={cn("h-3.5 w-3.5", isSyncing && "animate-spin")} />
+                  </Button>
+                </div>
+                {syncError && <p className="text-xs text-destructive">{syncError}</p>}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">Connect a GitHub repo to give the AI access to your codebase.</p>
+                <Input
+                  value={githubUrl}
+                  onChange={(e) => setGithubUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repo"
+                  className="h-7 text-xs"
+                />
+                <Button size="sm" className="w-full h-7 text-xs" onClick={handleSync} disabled={isSyncing || !githubUrl.trim()}>
+                  {isSyncing ? (
+                    <><RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />Syncing...</>
+                  ) : (
+                    <><Github className="h-3.5 w-3.5 mr-1" />Connect & Sync</>
+                  )}
+                </Button>
+                {syncError && <p className="text-xs text-destructive">{syncError}</p>}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Project context */}
         <Card>
           <CardHeader className="pb-2 pt-3 px-3">
