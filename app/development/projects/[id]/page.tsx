@@ -707,26 +707,8 @@ export default function ProjectDetailPage({
             {/* ── Chat ── */}
             <TabsContent value="chat" className="mt-0 h-[calc(100vh-280px)]">
               <div className="flex flex-col h-full">
-                <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-                  {[
-                    { user: users[0], message: "Hey team, pushed latest updates. Please review.", time: "10:30 AM" },
-                    { user: users[1], message: "Great work! Will take a look this afternoon.", time: "10:45 AM" },
-                    { user: users[0], message: "Perfect, let's sync tomorrow.", time: "11:30 AM" },
-                  ].map((chat, i) => (
-                    <div key={i} className="flex gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={chat.user.avatar} />
-                        <AvatarFallback>{chat.user.name.slice(0, 2)}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{chat.user.name}</span>
-                          <span className="text-xs text-muted-foreground">{chat.time}</span>
-                        </div>
-                        <p className="text-sm mt-1 text-foreground/90">{chat.message}</p>
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex-1 p-4 flex items-center justify-center text-muted-foreground text-sm">
+                  Team chat coming soon.
                 </div>
                 <div className="p-4 border-t">
                   <div className="flex items-center gap-2">
