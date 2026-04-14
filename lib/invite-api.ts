@@ -1,10 +1,12 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
 function authHeaders() {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token = localStorage.getItem("authToken");
+  const userStr = localStorage.getItem("user");
+  const userId = userStr ? JSON.parse(userStr).id : "demo-user-id";
   return {
     "Content-Type": "application/json",
-    "X-User-ID": localStorage.getItem("userId") || "demo-user-id",
+    "X-User-ID": userId,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
