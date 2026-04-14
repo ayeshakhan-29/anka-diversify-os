@@ -5,7 +5,6 @@ import { MainLayout } from "@/components/layout/main-layout";
 import { ProjectsHeader } from "@/components/project/ProjectsHeader";
 import { ProjectsGrid } from "@/components/project/ProjectsGrid";
 import { ProjectsList } from "@/components/project/ProjectsList";
-import { projects as mockProjects } from "@/lib/mock-data";
 import { projectApi } from "@/lib/project-api";
 import type { Project } from "@/lib/types";
 
@@ -34,25 +33,15 @@ export default function ProjectsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [phaseFilter, setPhaseFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [projectsList, setProjectsList] = useState<Project[]>(mockProjects);
+  const [projectsList, setProjectsList] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch projects from backend on mount; fall back to mock data if unavailable
   useEffect(() => {
     projectApi
       .getAll()
-      .then((backendProjects) => {
-        // Merge: backend projects first, then any mock projects not already present
-        const backendIds = new Set(backendProjects.map((p) => p.id));
-        const merged = [
-          ...backendProjects,
-          ...mockProjects.filter((p) => !backendIds.has(p.id)),
-        ];
-        setProjectsList(merged);
-      })
-      .catch(() => {
-        // Backend unavailable — keep mock data
-      })
+      .then((backendProjects) => setProjectsList(backendProjects))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
@@ -83,25 +72,7 @@ export default function ProjectsPage() {
 
       setProjectsList((prev) => [created, ...prev]);
     } catch (error) {
-      console.warn("Backend unavailable, adding project locally:", error);
-      // Optimistic local fallback
-      setProjectsList((prev) => [
-        {
-          id: Date.now().toString(),
-          name: projectData.name,
-          description: projectData.description,
-          phase: projectData.phase as any,
-          progress: 0,
-          team: [],
-          githubUrl: projectData.githubUrl || undefined,
-          startDate: new Date().toISOString(),
-          dueDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-          tasks: [],
-          priority: projectData.priority as any,
-          status: "active",
-        },
-        ...prev,
-      ]);
+      console.error("Failed to create project:", error);
     }
   };
 
