@@ -202,25 +202,6 @@ export default function ProjectDetailPage({
   const [commentInput, setCommentInput] = useState("");
   const [commentSubmitting, setCommentSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (!selectedTask) return;
-    projectApi.getComments(id, selectedTask.id).then(setComments).catch(() => {});
-  }, [id, selectedTask?.id]);
-
-  const handleAddComment = async () => {
-    if (!commentInput.trim() || !selectedTask || commentSubmitting) return;
-    setCommentSubmitting(true);
-    try {
-      const comment = await projectApi.createComment(id, selectedTask.id, commentInput.trim());
-      setComments((prev) => [...prev, comment]);
-      setCommentInput("");
-      // refresh activities
-      projectApi.getActivities(id).then(setActivities).catch(() => {});
-    } catch { /* silent */ } finally {
-      setCommentSubmitting(false);
-    }
-  };
-
   // ── kanban state ──
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
@@ -234,6 +215,24 @@ export default function ProjectDetailPage({
 
   // ── task detail sidebar ──
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  useEffect(() => {
+    if (!selectedTask) return;
+    projectApi.getComments(id, selectedTask.id).then(setComments).catch(() => {});
+  }, [id, selectedTask?.id]);
+
+  const handleAddComment = async () => {
+    if (!commentInput.trim() || !selectedTask || commentSubmitting) return;
+    setCommentSubmitting(true);
+    try {
+      const comment = await projectApi.createComment(id, selectedTask.id, commentInput.trim());
+      setComments((prev) => [...prev, comment]);
+      setCommentInput("");
+      projectApi.getActivities(id).then(setActivities).catch(() => {});
+    } catch { /* silent */ } finally {
+      setCommentSubmitting(false);
+    }
+  };
 
   // ── delete task confirmation ──
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
