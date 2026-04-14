@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use, useEffect } from "react";
+import { useState, use, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Button } from "@/components/ui/button";
@@ -193,9 +193,24 @@ export default function ProjectDetailPage({
 
   // ── activities state ──
   const [activities, setActivities] = useState<Activity[]>([]);
-  useEffect(() => {
+  const [activeTab, setActiveTab] = useState("kanban");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const refreshActivities = useCallback(() => {
     projectApi.getActivities(id).then(setActivities).catch(() => {});
   }, [id]);
+
+  useEffect(() => { refreshActivities(); }, [refreshActivities]);
+
+  // Poll every 8s when activity tab is open
+  useEffect(() => {
+    if (activeTab === "activity") {
+      pollRef.current = setInterval(refreshActivities, 8000);
+    } else {
+      if (pollRef.current) clearInterval(pollRef.current);
+    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [activeTab, refreshActivities]);
 
   // ── comments state ──
   const [comments, setComments] = useState<Comment[]>([]);
@@ -228,7 +243,7 @@ export default function ProjectDetailPage({
       const comment = await projectApi.createComment(id, selectedTask.id, commentInput.trim());
       setComments((prev) => [...prev, comment]);
       setCommentInput("");
-      projectApi.getActivities(id).then(setActivities).catch(() => {});
+      refreshActivities();
     } catch { /* silent */ } finally {
       setCommentSubmitting(false);
     }
@@ -291,12 +306,13 @@ export default function ProjectDetailPage({
       prev.map((t) => t.id === draggedTask.id ? { ...t, status: newStatus } : t),
     );
     // Persist to backend
-    projectApi.updateTask(id, draggedTask.id, { status }).catch(() => {
-      // Roll back on failure
-      setTasks((prev) =>
-        prev.map((t) => t.id === draggedTask.id ? { ...t, status: draggedTask.status } : t),
-      );
-    });
+    projectApi.updateTask(id, draggedTask.id, { status })
+      .then(() => refreshActivities())
+      .catch(() => {
+        setTasks((prev) =>
+          prev.map((t) => t.id === draggedTask.id ? { ...t, status: draggedTask.status } : t),
+        );
+      });
     setDraggedTask(null);
   };
 
@@ -309,8 +325,8 @@ export default function ProjectDetailPage({
     setTasks((prev) => prev.filter((t) => t.id !== task.id));
     try {
       await projectApi.deleteTask(id, task.id);
+      refreshActivities();
     } catch {
-      // Roll back
       setTasks((prev) => [...prev, task]);
     }
   };
@@ -342,11 +358,9 @@ export default function ProjectDetailPage({
         phase: optimistic.phase,
         dueDate: optimistic.dueDate || undefined,
       });
-      // Replace optimistic entry with real one
       setTasks((prev) => prev.map((t) => t.id === optimistic.id ? saved : t));
-    } catch {
-      // Keep optimistic; it'll be lost on refresh but at least the user sees it
-    }
+      refreshActivities();
+    } catch { /* keep optimistic */ }
   };
 
   const handleSaveEdit = async () => {
@@ -483,7 +497,7 @@ export default function ProjectDetailPage({
           </div>
 
           {/* ── Tabs ── */}
-          <Tabs defaultValue="kanban" className="w-full">
+          <Tabs defaultValue="kanban" className="w-full" onValueChange={(v) => { setActiveTab(v); if (v === "activity") refreshActivities(); }}>
             <div className="px-4 border-t">
               <TabsList className="h-12 bg-transparent gap-4 -mb-px">
                 {["kanban", "files", "chat", "activity", "ai-assistant"].map((tab) => (
