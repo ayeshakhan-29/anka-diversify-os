@@ -1,12 +1,21 @@
-import type { Project, Task, ProjectFile } from "./types";
+import type { Project, Task, ProjectFile, Activity, Comment } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
-const DEMO_USER_ID = "demo-user-id";
 
-const headers = {
-  "Content-Type": "application/json",
-  "X-User-ID": DEMO_USER_ID,
-};
+function getHeaders(): Record<string, string> {
+  if (typeof window === "undefined") {
+    return { "Content-Type": "application/json", "X-User-ID": "demo-user-id" };
+  }
+  const token = localStorage.getItem("authToken");
+  const userStr = localStorage.getItem("user");
+  const user = userStr ? JSON.parse(userStr) : null;
+  return {
+    "Content-Type": "application/json",
+    "X-User-ID": user?.id || "demo-user-id",
+    "X-User-Name": user?.name || "Demo User",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
 
 // in-progress ↔ in_progress conversion
 function toFrontendStatus(s: string): Task["status"] {
@@ -53,7 +62,7 @@ function mapProject(p: any): Project {
 
 export const projectApi = {
   async getAll(): Promise<Project[]> {
-    const res = await fetch(`${BASE_URL}/projects`, { headers });
+    const res = await fetch(`${BASE_URL}/projects`, { headers: getHeaders() });
     if (!res.ok) throw new Error(`GET /projects failed: ${res.status}`);
     const { data } = await res.json();
     return (data as any[]).map(mapProject);
@@ -68,7 +77,7 @@ export const projectApi = {
   }): Promise<Project> {
     const res = await fetch(`${BASE_URL}/projects`, {
       method: "POST",
-      headers,
+      headers: getHeaders(),
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`POST /projects failed: ${res.status}`);
@@ -77,7 +86,7 @@ export const projectApi = {
   },
 
   async getById(id: string): Promise<Project> {
-    const res = await fetch(`${BASE_URL}/projects/${id}`, { headers });
+    const res = await fetch(`${BASE_URL}/projects/${id}`, { headers: getHeaders() });
     if (!res.ok) throw new Error(`GET /projects/${id} failed: ${res.status}`);
     const { data } = await res.json();
     return mapProject(data);
@@ -97,7 +106,7 @@ export const projectApi = {
   ): Promise<Project> {
     const res = await fetch(`${BASE_URL}/projects/${id}`, {
       method: "PUT",
-      headers,
+      headers: getHeaders(),
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`PUT /projects/${id} failed: ${res.status}`);
@@ -108,7 +117,7 @@ export const projectApi = {
   async remove(id: string): Promise<void> {
     const res = await fetch(`${BASE_URL}/projects/${id}`, {
       method: "DELETE",
-      headers,
+      headers: getHeaders(),
     });
     if (!res.ok) throw new Error(`DELETE /projects/${id} failed: ${res.status}`);
   },
@@ -116,7 +125,7 @@ export const projectApi = {
   // ── Tasks ──────────────────────────────────────────────────────────────────
 
   async getTasks(projectId: string): Promise<Task[]> {
-    const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks`, { headers });
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks`, { headers: getHeaders() });
     if (!res.ok) throw new Error(`GET tasks failed: ${res.status}`);
     const { data } = await res.json();
     return (data as any[]).map((t) => mapTask(t, projectId));
@@ -132,7 +141,7 @@ export const projectApi = {
   }): Promise<Task> {
     const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks`, {
       method: "POST",
-      headers,
+      headers: getHeaders(),
       body: JSON.stringify({ ...payload, status: payload.status ? toBackendStatus(payload.status) : undefined }),
     });
     if (!res.ok) throw new Error(`POST task failed: ${res.status}`);
@@ -150,7 +159,7 @@ export const projectApi = {
   }): Promise<Task> {
     const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks/${taskId}`, {
       method: "PUT",
-      headers,
+      headers: getHeaders(),
       body: JSON.stringify({ ...payload, status: payload.status ? toBackendStatus(payload.status) : undefined }),
     });
     if (!res.ok) throw new Error(`PUT task failed: ${res.status}`);
@@ -161,7 +170,7 @@ export const projectApi = {
   async deleteTask(projectId: string, taskId: string): Promise<void> {
     const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks/${taskId}`, {
       method: "DELETE",
-      headers,
+      headers: getHeaders(),
     });
     if (!res.ok) throw new Error(`DELETE task failed: ${res.status}`);
   },
@@ -169,7 +178,7 @@ export const projectApi = {
   async syncGithub(projectId: string, githubUrl: string): Promise<void> {
     await fetch(`${BASE_URL}/projects/${projectId}/sync-github`, {
       method: "POST",
-      headers,
+      headers: getHeaders(),
       body: JSON.stringify({ githubUrl }),
     });
   },
@@ -177,7 +186,7 @@ export const projectApi = {
   // ── Files ──────────────────────────────────────────────────────────────────
 
   async getFiles(projectId: string): Promise<ProjectFile[]> {
-    const res = await fetch(`${BASE_URL}/projects/${projectId}/files`, { headers });
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/files`, { headers: getHeaders() });
     if (!res.ok) throw new Error(`GET files failed: ${res.status}`);
     const { data } = await res.json();
     return data as ProjectFile[];
@@ -187,7 +196,7 @@ export const projectApi = {
     // Step 1: get presigned S3 URL
     const presignRes = await fetch(`${BASE_URL}/projects/${projectId}/files/presign`, {
       method: "POST",
-      headers,
+      headers: getHeaders(),
       body: JSON.stringify({ filename: file.name, mimetype: file.type, phase: opts.phase }),
     });
     if (!presignRes.ok) throw new Error(`Presign failed: ${presignRes.status}`);
@@ -204,7 +213,7 @@ export const projectApi = {
     // Step 3: confirm in DB
     const confirmRes = await fetch(`${BASE_URL}/projects/${projectId}/files/confirm`, {
       method: "POST",
-      headers,
+      headers: getHeaders(),
       body: JSON.stringify({
         name: file.name,
         type,
@@ -230,7 +239,7 @@ export const projectApi = {
   }): Promise<ProjectFile> {
     const res = await fetch(`${BASE_URL}/projects/${projectId}/files`, {
       method: "POST",
-      headers,
+      headers: getHeaders(),
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`POST file failed: ${res.status}`);
@@ -241,8 +250,45 @@ export const projectApi = {
   async deleteFile(projectId: string, fileId: string): Promise<void> {
     const res = await fetch(`${BASE_URL}/projects/${projectId}/files/${fileId}`, {
       method: "DELETE",
-      headers,
+      headers: getHeaders(),
     });
     if (!res.ok) throw new Error(`DELETE file failed: ${res.status}`);
+  },
+
+  // ── Activities ─────────────────────────────────────────────────────────────
+
+  async getActivities(projectId: string): Promise<Activity[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/activities`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET activities failed: ${res.status}`);
+    const { data } = await res.json();
+    return data as Activity[];
+  },
+
+  // ── Comments ───────────────────────────────────────────────────────────────
+
+  async getComments(projectId: string, taskId: string): Promise<Comment[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks/${taskId}/comments`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET comments failed: ${res.status}`);
+    const { data } = await res.json();
+    return data as Comment[];
+  },
+
+  async createComment(projectId: string, taskId: string, content: string): Promise<Comment> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks/${taskId}/comments`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ content }),
+    });
+    if (!res.ok) throw new Error(`POST comment failed: ${res.status}`);
+    const { data } = await res.json();
+    return data as Comment;
+  },
+
+  async deleteComment(projectId: string, taskId: string, commentId: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks/${taskId}/comments/${commentId}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error(`DELETE comment failed: ${res.status}`);
   },
 };

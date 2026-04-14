@@ -143,6 +143,29 @@ export interface ProjectFile {
   updatedAt: string;
 }
 
+export interface Activity {
+  id: string;
+  projectId: string;
+  userId: string;
+  userName: string;
+  action: string;
+  entityType: string;
+  entityId?: string;
+  entityName?: string;
+  meta?: Record<string, any>;
+  createdAt: string;
+}
+
+export interface Comment {
+  id: string;
+  taskId: string;
+  projectId: string;
+  userId: string;
+  userName: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface Department {
   id: string;
   name: string;

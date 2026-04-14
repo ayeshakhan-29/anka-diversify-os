@@ -37,9 +37,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { projects as mockProjects, users } from "@/lib/mock-data";
+import { projects as mockProjects } from "@/lib/mock-data";
 import { projectApi } from "@/lib/project-api";
-import type { Project, Task, ProjectFile } from "@/lib/types";
+import type { Project, Task, ProjectFile, Activity, Comment } from "@/lib/types";
 import {
   ArrowLeft,
   Plus,
@@ -188,6 +188,36 @@ export default function ProjectDetailPage({
       await projectApi.deleteFile(id, file.id);
     } catch {
       setFiles((prev) => [file, ...prev]);
+    }
+  };
+
+  // ── activities state ──
+  const [activities, setActivities] = useState<Activity[]>([]);
+  useEffect(() => {
+    projectApi.getActivities(id).then(setActivities).catch(() => {});
+  }, [id]);
+
+  // ── comments state ──
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentInput, setCommentInput] = useState("");
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!selectedTask) return;
+    projectApi.getComments(id, selectedTask.id).then(setComments).catch(() => {});
+  }, [id, selectedTask?.id]);
+
+  const handleAddComment = async () => {
+    if (!commentInput.trim() || !selectedTask || commentSubmitting) return;
+    setCommentSubmitting(true);
+    try {
+      const comment = await projectApi.createComment(id, selectedTask.id, commentInput.trim());
+      setComments((prev) => [...prev, comment]);
+      setCommentInput("");
+      // refresh activities
+      projectApi.getActivities(id).then(setActivities).catch(() => {});
+    } catch { /* silent */ } finally {
+      setCommentSubmitting(false);
     }
   };
 
@@ -477,7 +507,7 @@ export default function ProjectDetailPage({
               <div className="p-4 flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <Select value={phaseFilter} onValueChange={setPhaseFilter}>
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-45">
                       <SelectValue placeholder="Filter by phase" />
                     </SelectTrigger>
                     <SelectContent>
@@ -493,7 +523,7 @@ export default function ProjectDetailPage({
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-4 gap-4 min-h-[600px]">
+                <div className="grid grid-cols-4 gap-4 min-h-150">
                   {statusColumns.map((column) => {
                     const columnTasks = getTasksByStatus(column.id);
                     const Icon = column.icon;
@@ -715,31 +745,34 @@ export default function ProjectDetailPage({
             <TabsContent value="activity" className="mt-0">
               <div className="p-6">
                 <h2 className="text-lg font-semibold mb-4">Recent Activity</h2>
-                <div className="space-y-4">
-                  {[
-                    { user: users[0], action: "moved task", target: "Setup CI/CD Pipeline", from: "In Progress", to: "Review", time: "2 hours ago" },
-                    { user: users[1], action: "commented on", target: "API Integration", time: "3 hours ago" },
-                    { user: users[0], action: "created task", target: "User Authentication Flow", time: "Yesterday" },
-                  ].map((activity, i) => (
-                    <div key={i} className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={activity.user.avatar} />
-                        <AvatarFallback>{activity.user.name.slice(0, 2)}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1">
-                        <p className="text-sm">
-                          <span className="font-medium">{activity.user.name}</span>
-                          <span className="text-muted-foreground"> {activity.action} </span>
-                          <span className="font-medium">{activity.target}</span>
-                          {activity.from && (
-                            <span className="text-muted-foreground"> from {activity.from} to {activity.to}</span>
-                          )}
-                        </p>
-                        <span className="text-xs text-muted-foreground">{activity.time}</span>
+                {activities.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No activity yet. Create or move a task to get started.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {activities.map((activity) => (
+                      <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-xs">{activity.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <p className="text-sm">
+                            <span className="font-medium">{activity.userName}</span>
+                            <span className="text-muted-foreground"> {activity.action.replace(/_/g, " ")} </span>
+                            {activity.entityName && <span className="font-medium">{activity.entityName}</span>}
+                            {activity.meta?.to && (
+                              <span className="text-muted-foreground"> → {String(activity.meta.to).replace(/_/g, " ")}</span>
+                            )}
+                          </p>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(activity.createdAt).toLocaleString("en-US", {
+                              month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </TabsContent>
 
@@ -752,7 +785,7 @@ export default function ProjectDetailPage({
 
         {/* ── Edit Project Dialog ── */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-125">
             <DialogHeader>
               <DialogTitle>Edit Project</DialogTitle>
               <DialogDescription>Update project details and settings</DialogDescription>
@@ -828,7 +861,7 @@ export default function ProjectDetailPage({
 
         {/* ── Delete Project Confirm ── */}
         <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-          <DialogContent className="sm:max-w-[400px]">
+          <DialogContent className="sm:max-w-100">
             <DialogHeader>
               <DialogTitle>Delete Project</DialogTitle>
               <DialogDescription>
@@ -1041,7 +1074,7 @@ export default function ProjectDetailPage({
 
         {/* ── Task Detail Sidebar ── */}
         {selectedTask && (
-          <div className="fixed inset-y-0 right-0 w-[400px] bg-card border-l shadow-xl z-50">
+          <div className="fixed inset-y-0 right-0 w-100 bg-card border-l shadow-xl z-50">
             <div className="flex flex-col h-full">
               <div className="p-4 border-b flex items-center justify-between">
                 <h3 className="font-semibold">Task Details</h3>
@@ -1108,9 +1141,33 @@ export default function ProjectDetailPage({
                 </div>
                 <div className="pt-4 border-t">
                   <h5 className="font-medium mb-3">Comments</h5>
-                  <div className="mt-3 flex gap-2">
-                    <Input placeholder="Add a comment..." className="flex-1" />
-                    <Button size="icon" className="h-9 w-9"><Send className="h-4 w-4" /></Button>
+                  <div className="space-y-3 mb-3">
+                    {comments.map((c) => (
+                      <div key={c.id} className="flex gap-2">
+                        <Avatar className="h-6 w-6 shrink-0">
+                          <AvatarFallback className="text-xs">{c.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 bg-muted/50 rounded-lg p-2">
+                          <p className="text-xs font-medium">{c.userName}</p>
+                          <p className="text-sm mt-0.5">{c.content}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {new Date(c.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Add a comment..."
+                      className="flex-1"
+                      value={commentInput}
+                      onChange={(e) => setCommentInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
+                    />
+                    <Button size="icon" className="h-9 w-9" onClick={handleAddComment} disabled={commentSubmitting || !commentInput.trim()}>
+                      <Send className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </div>
