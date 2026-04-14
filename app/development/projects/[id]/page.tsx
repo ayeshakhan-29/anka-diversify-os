@@ -39,7 +39,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { projects as mockProjects } from "@/lib/mock-data";
 import { projectApi } from "@/lib/project-api";
-import type { Project, Task, ProjectFile, Activity, Comment } from "@/lib/types";
+import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage } from "@/lib/types";
 import {
   ArrowLeft,
   Plus,
@@ -50,7 +50,6 @@ import {
   Circle,
   AlertCircle,
   GripVertical,
-  Paperclip,
   Flag,
   User,
   Tag,
@@ -251,6 +250,43 @@ export default function ProjectDetailPage({
 
   // ── delete task confirmation ──
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+
+  // ── chat state ──
+  const [chatMessages, setChatMessages] = useState<ProjectChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const refreshChat = useCallback(() => {
+    projectApi.getChatMessages(id).then((msgs) => {
+      setChatMessages(msgs);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    }).catch(() => {});
+  }, [id]);
+
+  useEffect(() => {
+    if (activeTab === "chat") {
+      refreshChat();
+      chatPollRef.current = setInterval(refreshChat, 5000);
+    } else {
+      if (chatPollRef.current) clearInterval(chatPollRef.current);
+    }
+    return () => { if (chatPollRef.current) clearInterval(chatPollRef.current); };
+  }, [activeTab, refreshChat]);
+
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || chatSending) return;
+    const content = chatInput.trim();
+    setChatInput("");
+    setChatSending(true);
+    try {
+      const msg = await projectApi.sendChatMessage(id, content);
+      setChatMessages((prev) => [...prev, msg]);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    } catch { setChatInput(content); }
+    finally { setChatSending(false); }
+  };
 
   // ── edit project dialog ──
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -721,16 +757,49 @@ export default function ProjectDetailPage({
             {/* ── Chat ── */}
             <TabsContent value="chat" className="mt-0 h-[calc(100vh-280px)]">
               <div className="flex flex-col h-full">
-                <div className="flex-1 p-4 flex items-center justify-center text-muted-foreground text-sm">
-                  Team chat coming soon.
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {chatMessages.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                      No messages yet. Start the conversation!
+                    </div>
+                  ) : (
+                    chatMessages.map((msg) => {
+                      const currentUser = typeof window !== "undefined"
+                        ? (() => { try { return JSON.parse(localStorage.getItem("user") || "{}"); } catch { return {}; } })()
+                        : {};
+                      const isMe = msg.userId === currentUser?.id;
+                      return (
+                        <div key={msg.id} className={`flex gap-3 ${isMe ? "flex-row-reverse" : ""}`}>
+                          <Avatar className="h-8 w-8 shrink-0">
+                            <AvatarFallback className="text-xs">{msg.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div className={`max-w-[70%] ${isMe ? "items-end" : "items-start"} flex flex-col`}>
+                            {!isMe && <p className="text-xs text-muted-foreground mb-1">{msg.userName}</p>}
+                            <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted rounded-tl-sm"}`}>
+                              {msg.content}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(msg.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={chatEndRef} />
                 </div>
                 <div className="p-4 border-t">
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <Paperclip className="h-4 w-4" />
+                    <Input
+                      placeholder="Type a message..."
+                      className="flex-1"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
+                    />
+                    <Button size="icon" className="h-9 w-9" onClick={handleSendChat} disabled={chatSending || !chatInput.trim()}>
+                      <Send className="h-4 w-4" />
                     </Button>
-                    <Input placeholder="Type a message..." className="flex-1" />
-                    <Button size="icon" className="h-8 w-8"><Send className="h-4 w-4" /></Button>
                   </div>
                 </div>
               </div>

@@ -156,6 +156,15 @@ export interface Activity {
   createdAt: string;
 }
 
+export interface ProjectChatMessage {
+  id: string;
+  projectId: string;
+  userId: string;
+  userName: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface Comment {
   id: string;
   taskId: string;

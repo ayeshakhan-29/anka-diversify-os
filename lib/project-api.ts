@@ -1,4 +1,4 @@
-import type { Project, Task, ProjectFile, Activity, Comment } from "./types";
+import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
@@ -253,6 +253,26 @@ export const projectApi = {
       headers: getHeaders(),
     });
     if (!res.ok) throw new Error(`DELETE file failed: ${res.status}`);
+  },
+
+  // ── Chat ───────────────────────────────────────────────────────────────────
+
+  async getChatMessages(projectId: string): Promise<ProjectChatMessage[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/chat`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET chat failed: ${res.status}`);
+    const { data } = await res.json();
+    return data as ProjectChatMessage[];
+  },
+
+  async sendChatMessage(projectId: string, content: string): Promise<ProjectChatMessage> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/chat`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ content }),
+    });
+    if (!res.ok) throw new Error(`POST chat failed: ${res.status}`);
+    const { data } = await res.json();
+    return data as ProjectChatMessage;
   },
 
   // ── Activities ─────────────────────────────────────────────────────────────
