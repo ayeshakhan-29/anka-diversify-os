@@ -183,6 +183,27 @@ class AIClient {
     return this.request<ProjectContext>(`/projects/${projectId}/context`);
   }
 
+  // Coding Agent
+  async runAgent(projectId: string, message: string, sessionId?: string): Promise<{
+    explanation: string;
+    changes: { path: string; content: string; description: string }[];
+    commitMessage: string;
+    sessionId: string;
+  }> {
+    const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/agent/run`, {
+      method: "POST",
+      body: JSON.stringify({ message, sessionId }),
+    });
+    return res.data;
+  }
+
+  async pushAgentChanges(projectId: string, changes: { path: string; content: string }[], commitMessage: string): Promise<{ sha: string; url: string }> {
+    const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/agent/push`, {
+      method: "POST",
+      body: JSON.stringify({ changes, commitMessage }),
+    });
+    return res.data;
+  }
 }
 
 export const aiClient = new AIClient();

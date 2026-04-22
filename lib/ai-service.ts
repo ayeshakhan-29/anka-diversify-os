@@ -63,6 +63,7 @@ export class AIService {
     type: "global" | "project",
     projectId?: string,
     projectName?: string,
+    mode?: "chat" | "code",
   ): Promise<AIResponse> {
     const context = this.getChatContext(contextId, type, projectId, projectName);
 
@@ -77,6 +78,7 @@ export class AIService {
         const res = await aiClient.sendProjectMessage(projectId, {
           message: userMessage,
           sessionId: contextId,
+          context: mode ? { mode } : undefined,
         });
         responseText = res.message;
         sessionId = res.sessionId;
