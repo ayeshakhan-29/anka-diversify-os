@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProjectAIAssistant } from "@/components/ai/project-ai-assistant";
+import { ProjectIDE } from "@/components/project/project-ide";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -230,6 +231,14 @@ export default function ProjectDetailPage({
   const [activeTab, setActiveTab] = useState("kanban");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // ── agent → IDE bridge ──
+  const [pendingAgentChanges, setPendingAgentChanges] = useState<{ path: string; content: string; description: string }[] | null>(null);
+
+  const handleAgentChanges = (changes: { path: string; content: string; description: string }[]) => {
+    setPendingAgentChanges(changes);
+    setActiveTab("code");
+  };
+
   const refreshActivities = useCallback(() => {
     projectApi.getActivities(id).then(setActivities).catch(() => {});
   }, [id]);
@@ -327,7 +336,7 @@ export default function ProjectDetailPage({
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<{
     name: string; description: string; phase: string;
-    priority: string; dueDate: string; githubUrl: string;
+    priority: string; dueDate: string; githubUrl: string; localPath: string;
   }>({
     name: project.name,
     description: project.description,
@@ -335,6 +344,7 @@ export default function ProjectDetailPage({
     priority: project.priority || "medium",
     dueDate: toDateInputValue(project.dueDate),
     githubUrl: project.githubUrl || "",
+    localPath: project.localPath || "",
   });
   const [editSaving, setEditSaving] = useState(false);
 
@@ -351,6 +361,7 @@ export default function ProjectDetailPage({
       priority: project.priority || "medium",
       dueDate: toDateInputValue(project.dueDate),
       githubUrl: project.githubUrl || "",
+      localPath: project.localPath || "",
     });
   }, [project.id, project.name]);
 
@@ -444,10 +455,10 @@ export default function ProjectDetailPage({
         priority: editForm.priority,
         dueDate: editForm.dueDate || undefined,
         githubUrl: editForm.githubUrl || undefined,
+        localPath: editForm.localPath || undefined,
       });
       setProject(updated);
     } catch {
-      // Update locally if backend unavailable
       setProject((p) => ({
         ...p,
         name: editForm.name,
@@ -456,6 +467,7 @@ export default function ProjectDetailPage({
         priority: editForm.priority as Project["priority"],
         dueDate: editForm.dueDate || p.dueDate,
         githubUrl: editForm.githubUrl || undefined,
+        localPath: editForm.localPath || undefined,
       }));
     } finally {
       setEditSaving(false);
@@ -567,10 +579,10 @@ export default function ProjectDetailPage({
           </div>
 
           {/* ── Tabs ── */}
-          <Tabs defaultValue="kanban" className="w-full" onValueChange={(v) => { setActiveTab(v); if (v === "activity") refreshActivities(); }}>
+          <Tabs value={activeTab} className="w-full" onValueChange={(v) => { setActiveTab(v); if (v === "activity") refreshActivities(); }}>
             <div className="px-4 border-t">
               <TabsList className="h-12 bg-transparent gap-4 -mb-px">
-                {["kanban", "files", "chat", "activity", "ai-assistant"].map((tab) => (
+                {["kanban", "files", "code", "chat", "activity", "ai-assistant"].map((tab) => (
                   <TabsTrigger
                     key={tab}
                     value={tab}
@@ -578,6 +590,7 @@ export default function ProjectDetailPage({
                   >
                     {tab === "kanban" ? "Kanban Board"
                       : tab === "files" ? "Files & Deliverables"
+                      : tab === "code" ? "Code"
                       : tab === "ai-assistant" ? "AI Assistant"
                       : tab.charAt(0).toUpperCase() + tab.slice(1)}
                   </TabsTrigger>
@@ -874,9 +887,18 @@ export default function ProjectDetailPage({
               </div>
             </TabsContent>
 
+            {/* ── Code (IDE) ── */}
+            <TabsContent value="code" className="mt-0 p-4">
+              <ProjectIDE
+                project={project}
+                pendingChanges={pendingAgentChanges}
+                onChangesApplied={() => setPendingAgentChanges(null)}
+              />
+            </TabsContent>
+
             {/* ── AI Assistant ── */}
             <TabsContent value="ai-assistant" className="mt-0 flex-1">
-              <ProjectAIAssistant project={project} />
+              <ProjectAIAssistant project={project} onAgentChanges={handleAgentChanges} />
             </TabsContent>
           </Tabs>
         </div>
@@ -946,6 +968,15 @@ export default function ProjectDetailPage({
                   value={editForm.githubUrl}
                   onChange={(e) => setEditForm((f) => ({ ...f, githubUrl: e.target.value }))}
                 />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">Local Project Path</label>
+                <Input
+                  placeholder="/Users/you/projects/my-app"
+                  value={editForm.localPath}
+                  onChange={(e) => setEditForm((f) => ({ ...f, localPath: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">Where this repo is cloned on your machine. The terminal will start here and the AI agent will write changes directly to these files.</p>
               </div>
 
               {/* ── Team Members ── */}

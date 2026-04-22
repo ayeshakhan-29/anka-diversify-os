@@ -19,6 +19,7 @@ export interface Project {
   priority: "low" | "medium" | "high" | "critical";
   status: "active" | "on-hold" | "completed";
   githubUrl?: string;
+  localPath?: string;
   lastCommit?: {
     message: string;
     author: string;

@@ -53,6 +53,7 @@ function mapProject(p: any): Project {
     priority: p.priority || "medium",
     status: p.status || "active",
     githubUrl: p.githubUrl || undefined,
+    localPath: p.localPath || undefined,
     startDate: p.startDate ? new Date(p.startDate).toISOString() : new Date().toISOString(),
     dueDate: p.dueDate ? new Date(p.dueDate).toISOString() : new Date().toISOString(),
     team: [],
@@ -109,6 +110,7 @@ export const projectApi = {
       phase?: string;
       priority?: string;
       githubUrl?: string;
+      localPath?: string;
       status?: string;
       dueDate?: string;
     },
@@ -194,6 +196,36 @@ export const projectApi = {
       const json = await res.json().catch(() => ({}));
       throw new Error(json.error || `Sync failed: ${res.status}`);
     }
+  },
+
+  async getRepoFile(projectId: string, filePath: string): Promise<{ path: string; content: string; sha: string } | null> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/repo/file?path=${encodeURIComponent(filePath)}`, { headers: getHeaders() });
+    if (!res.ok) return null;
+    const { data } = await res.json();
+    return data;
+  },
+
+  async saveRepoFile(projectId: string, filePath: string, content: string, commitMessage?: string): Promise<{ sha: string; url: string }> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/repo/file`, {
+      method: "PUT",
+      headers: getHeaders(),
+      body: JSON.stringify({ path: filePath, content, commitMessage }),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      throw new Error(json.error || `Save failed: ${res.status}`);
+    }
+    const { data } = await res.json();
+    return data;
+  },
+
+  async applyLocalChanges(projectId: string, changes: { path: string; content: string }[]): Promise<void> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/apply-local`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ changes }),
+    });
+    if (!res.ok) throw new Error(`Apply local failed: ${res.status}`);
   },
 
   async getRepoSnapshot(projectId: string): Promise<{ repoName: string; fileTree: string[]; lastSyncedAt: string } | null> {

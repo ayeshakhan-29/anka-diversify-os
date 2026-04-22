@@ -37,7 +37,6 @@ npm run db:studio      # prisma studio GUI
 ```
 NEXT_PUBLIC_API_URL=http://localhost:3001/api
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-OPENAI_API_KEY=...
 ```
 
 **Backend** (`.env`):
@@ -47,47 +46,74 @@ OPENAI_API_KEY=...
 JWT_SECRET=...
 PORT=3001
 FRONTEND_URL=http://localhost:3000
+GITHUB_TOKEN=...        # required for private repos; classic token with `repo` scope
+AWS_ACCESS_KEY_ID=...   # required for file uploads
+AWS_SECRET_ACCESS_KEY=...
+AWS_REGION=...
+AWS_S3_BUCKET=...
 ```
+
+Backend uses `dotenv.config({ override: true })` — always restart the server after editing `.env` since nodemon only watches `.ts`/`.json` files.
 
 ## Architecture
 
 ### Frontend → Backend Communication
 
-All API calls use `X-User-ID: demo-user-id` header (no real auth yet). The backend auto-creates a demo user via `ensureUser()` in `project-service.ts` if it doesn't exist.
+`lib/project-api.ts` and `lib/ai-client.ts` are the only files that make HTTP calls. Both use a `getHeaders()` helper that reads `authToken` and `user` from `localStorage` and sends `Authorization`, `X-User-ID`, and `X-User-Name` headers. Never hardcode `demo-user-id` — always go through `getHeaders()`.
 
-Frontend API layer lives in `lib/`:
-- `lib/project-api.ts` — REST calls to `/api/projects/*`, maps backend shapes to frontend types
-- `lib/ai-client.ts` — REST calls to `/api/ai/*`
-- `lib/ai-service.ts` — wraps `ai-client.ts`; routes project chats to backend (which has repo context), general chats to `/api/ai/general/chat`
+The backend auto-creates any user via `ensureUser()` in `project-service.ts` if the ID from `X-User-ID` doesn't exist yet.
 
-### Backend Routes
+### Backend Route Map
 
 ```
-GET/POST   /api/projects
-GET/PUT/DELETE /api/projects/:id
-POST       /api/projects/:id/sync-github
-GET/POST   /api/projects/:id/tasks
-PUT/DELETE /api/projects/:id/tasks/:taskId
-POST/GET   /api/ai/general/chat, /api/ai/general/sessions
-POST/GET   /api/ai/projects/:id/chat, /api/ai/projects/:id/sessions
-GET        /api/ai/projects/:id/context
+GET/POST              /api/projects
+GET/PUT/DELETE        /api/projects/:id
+POST                  /api/projects/:id/sync-github        # fetch GitHub repo snapshot
+GET/POST              /api/projects/:id/tasks
+PUT/DELETE            /api/projects/:id/tasks/:taskId
+GET/POST/DELETE       /api/projects/:id/tasks/:taskId/comments
+GET/POST              /api/projects/:id/members
+DELETE                /api/projects/:id/members/:userId
+GET/POST              /api/projects/:id/chat
+GET                   /api/projects/:id/activities
+GET/POST              /api/projects/:id/files
+POST                  /api/projects/:id/files/presign      # S3 presigned URL
+POST                  /api/projects/:id/files/confirm      # confirm after S3 upload
+DELETE                /api/projects/:id/files/:fileId
+POST/GET              /api/ai/general/chat, /api/ai/general/sessions
+POST/GET              /api/ai/projects/:id/chat, /api/ai/projects/:id/sessions
+GET                   /api/ai/projects/:id/context
+POST                  /api/ai/projects/:id/agent/run       # coding agent: returns proposed file changes
+POST                  /api/ai/projects/:id/agent/push      # push confirmed changes to GitHub
+GET/POST              /api/auth/*
+GET/POST              /api/admin/*
+GET/POST              /api/invites/*
 ```
+
+All project queries have **no per-user filter** — this is a team app and all users see all projects.
 
 ### Status Mapping
 
-Backend stores task status as `in_progress`; frontend uses `in-progress`. Always convert:
-- `lib/project-api.ts`: `toFrontendStatus` / `toBackendStatus`
-- Backend controller passes `req.body.status` directly — conversion happens on the frontend side only
+Backend stores task status as `in_progress`; frontend uses `in-progress`. Conversion lives only in `lib/project-api.ts` (`toFrontendStatus` / `toBackendStatus`). Never convert anywhere else.
 
 ### AI / Repo Context
 
-When a project has a `githubUrl`, `github.service.ts` fetches the repo snapshot (file tree + up to 15 key files × 3000 chars) and stores it in `ProjectRepoSnapshot`. The AI service (`src/services/ai-service.ts`) injects this into the system prompt for project chats.
+`github.service.ts` fetches a repo snapshot (up to 500 files in the tree, 15 key files × 3000 chars each) and stores it in `ProjectRepoSnapshot`. `ai-service.ts` injects this snapshot into the system prompt for every project chat message.
+
+**Coding Agent** (`/agent/run` → `/agent/push`):
+- `runCodingAgent` in `ai-service.ts` uses `gpt-4` with `response_format: json_object` to produce `{ explanation, changes[], commitMessage }`
+- `pushChanges` in `github.service.ts` uses the GitHub Git Data API to make an atomic multi-file commit (creates blobs → tree → commit → updates ref)
+- The frontend shows a diff-review panel before the user confirms the push
 
 ### Frontend Data Pattern
 
-Pages seed from `lib/mock-data.ts` immediately for instant render, then hydrate from the backend in `useEffect`. Mock exports: `projects`, `users`, `teamMembers`, `tasks`, etc. — **not** `mockProjects`/`mockUsers`.
+Pages that show projects start with `useState<Project[]>([])` (empty — no mock seed) and hydrate from the backend in `useEffect`. The exception is `lib/mock-data.ts` which still exports data used by pages that haven't been fully wired to the backend yet. Mock exports are named `projects`, `users`, `teamMembers`, `tasks` — **not** `mockProjects`/`mockUsers`.
 
-Optimistic UI updates are used for task mutations (create, drag-drop status, delete) with rollback on API failure.
+Optimistic UI updates are used for task mutations (create, drag-drop status, delete) with rollback on API failure. Activity feed and chat use polling (`setInterval`) rather than websockets.
+
+### File Upload Flow
+
+Three-step: `POST /files/presign` → `PUT` directly to S3 with the presigned URL → `POST /files/confirm` to write metadata to DB. The confirm step stores `name`, `type`, `phase`, `url`, `s3Key`, `size`.
 
 ### Tailwind v4
 
@@ -95,3 +121,10 @@ Use canonical Tailwind v4 class names — avoid arbitrary values where equivalen
 - `w-[180px]` → `w-45`, `w-[400px]` → `w-100`
 - `min-h-[600px]` → `min-h-150`
 - `sm:max-w-[500px]` → `sm:max-w-125`, `sm:max-w-[400px]` → `sm:max-w-100`
+
+### Key Frontend Pages
+
+- `app/development/projects/[id]/page.tsx` — project detail with Kanban, Files, Chat, Activity, and AI Assistant tabs
+- `app/development/projects/page.tsx` — project list; real data only, no mock seed
+- `app/development/chats/page.tsx` — project chat rooms using real `ProjectChatMessage` data
+- `components/ai/project-ai-assistant.tsx` — Chat mode (markdown + syntax highlighting) and Agent mode (propose + review + push)
