@@ -29,6 +29,7 @@ import {
   GitCommit,
   ExternalLink,
   X,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AIService } from "@/lib/ai-service";
@@ -83,8 +84,11 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
     },
   ];
 
+  const AGENT_STORAGE_KEY = `agent-pending-${project.id}`;
+
   const [mode, setMode] = useState<Mode>("chat");
   const [messages, setMessages] = useState<Message[]>(getInitialMessages);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -107,25 +111,57 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
   const [isApplyingLocal, setIsApplyingLocal] = useState(false);
   const [applyLocalSuccess, setApplyLocalSuccess] = useState(false);
 
+  // Load chat history from backend on mount
+  useEffect(() => {
+    setHistoryLoading(true);
+    aiClient.getProjectSessions(project.id)
+      .then(({ sessions }) => {
+        if (!sessions.length) return null;
+        return aiClient.getProjectSessionMessages(project.id, sessions[0].id);
+      })
+      .then((data) => {
+        if (!data?.messages.length) return;
+        setMessages([
+          getInitialMessages()[0],
+          ...data.messages.map((m) => ({
+            id: m.id,
+            role: m.role as "user" | "assistant",
+            content: m.content,
+            timestamp: new Date(m.createdAt),
+          })),
+        ]);
+      })
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
+  }, [project.id]);
+
+  // Load pending agent changes from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(AGENT_STORAGE_KEY);
+      if (saved) {
+        const parsed: AgentResult = JSON.parse(saved);
+        setAgentResult(parsed);
+        setCommitMessage(parsed.commitMessage);
+        setSelectedFiles(new Set(parsed.changes.map((c) => c.path)));
+      }
+    } catch {}
+  }, [AGENT_STORAGE_KEY]);
+
+  // Persist agent result to localStorage whenever it changes
+  useEffect(() => {
+    if (agentResult) {
+      localStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(agentResult));
+    } else {
+      localStorage.removeItem(AGENT_STORAGE_KEY);
+    }
+  }, [agentResult, AGENT_STORAGE_KEY]);
+
   useEffect(() => {
     projectApi.getRepoSnapshot(project.id).then((snap) => {
       if (snap) setRepoSnapshot(snap);
     });
   }, [project.id]);
-
-  useEffect(() => {
-    const history = AIService.getChatHistory(contextId);
-    if (history.length > 0) {
-      setMessages(
-        history.map((msg, i) => ({
-          id: i.toString(),
-          role: msg.role as "user" | "assistant",
-          content: msg.content,
-          timestamp: msg.timestamp || new Date(),
-        })),
-      );
-    }
-  }, [contextId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -328,6 +364,13 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
         </CardHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
+          {/* History loading */}
+          {historyLoading && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading conversation history...
+            </div>
+          )}
           {/* Chat messages */}
           {messages.map((message) => (
             <div key={message.id} className={cn("flex gap-3", message.role === "user" && "flex-row-reverse")}>
