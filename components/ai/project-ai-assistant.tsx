@@ -30,9 +30,12 @@ import {
   ExternalLink,
   X,
   Loader2,
+  ListTodo,
+  CalendarClock,
+  ArrowUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AIService } from "@/lib/ai-service";
+import { AIService, type ProposedTask } from "@/lib/ai-service";
 import { projectApi } from "@/lib/project-api";
 import { aiClient } from "@/lib/ai-client";
 import type { Project } from "@/lib/types";
@@ -110,6 +113,11 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [isApplyingLocal, setIsApplyingLocal] = useState(false);
   const [applyLocalSuccess, setApplyLocalSuccess] = useState(false);
+
+  // Task proposal state
+  const [proposedTasks, setProposedTasks] = useState<ProposedTask[] | null>(null);
+  const [selectedProposedTasks, setSelectedProposedTasks] = useState<Set<number>>(new Set());
+  const [isAddingTasks, setIsAddingTasks] = useState(false);
 
   // Load chat history from backend on mount
   useEffect(() => {
@@ -211,6 +219,10 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
           ...prev,
           { id: (Date.now() + 1).toString(), role: "assistant", content: response.content, timestamp: new Date() },
         ]);
+        if (response.proposedTasks?.length) {
+          setProposedTasks(response.proposedTasks);
+          setSelectedProposedTasks(new Set(response.proposedTasks.map((_, i) => i)));
+        }
       } finally {
         setIsLoading(false);
       }
@@ -296,6 +308,81 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
     setMessages(getInitialMessages());
     setAgentResult(null);
     setPushResult(null);
+    setProposedTasks(null);
+    setSelectedProposedTasks(new Set());
+  };
+
+  const toggleProposedTask = (i: number) => {
+    setSelectedProposedTasks((prev) => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  };
+
+  const handleAddTasksToKanban = async () => {
+    if (!proposedTasks || selectedProposedTasks.size === 0) return;
+    setIsAddingTasks(true);
+    const tasksToAdd = proposedTasks.filter((_, i) => selectedProposedTasks.has(i));
+    try {
+      await Promise.all(
+        tasksToAdd.map((task) =>
+          projectApi.createTask(project.id, {
+            title: task.title,
+            description: task.description,
+            priority: task.priority,
+            phase: task.phase || project.phase || undefined,
+            status: "todo",
+          })
+        )
+      );
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `Added **${tasksToAdd.length} task${tasksToAdd.length !== 1 ? "s" : ""}** to the Kanban board. Switch to the Kanban tab to see them.`,
+          timestamp: new Date(),
+        },
+      ]);
+      setProposedTasks(null);
+      setSelectedProposedTasks(new Set());
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `Failed to add tasks: ${err instanceof Error ? err.message : "Unknown error"}`,
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setIsAddingTasks(false);
+    }
+  };
+
+  const handleQuickAction = async (prompt: string) => {
+    if (isLoading) return;
+    setIsLoading(true);
+    setProposedTasks(null);
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now().toString(), role: "user", content: prompt, timestamp: new Date() },
+    ]);
+    try {
+      const response = await AIService.sendMessage(prompt, contextId, "project", project.id, project.name);
+      setMessages((prev) => [
+        ...prev,
+        { id: (Date.now() + 1).toString(), role: "assistant", content: response.content, timestamp: new Date() },
+      ]);
+      if (response.proposedTasks?.length) {
+        setProposedTasks(response.proposedTasks);
+        setSelectedProposedTasks(new Set(response.proposedTasks.map((_, i) => i)));
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -558,6 +645,64 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
             </div>
           )}
 
+          {/* Task proposal card */}
+          {proposedTasks && proposedTasks.length > 0 && (
+            <div className="border border-green-500/30 rounded-lg overflow-hidden bg-green-500/5">
+              <div className="flex items-center justify-between px-4 py-3 bg-green-500/10 border-b border-green-500/20">
+                <div className="flex items-center gap-2">
+                  <ListTodo className="h-4 w-4 text-green-400" />
+                  <span className="text-sm font-medium">AI proposed {proposedTasks.length} task{proposedTasks.length !== 1 ? "s" : ""}</span>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">— select which to add to Kanban</span>
+                </div>
+                <button onClick={() => { setProposedTasks(null); setSelectedProposedTasks(new Set()); }} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-4 space-y-2">
+                {proposedTasks.map((task, i) => (
+                  <div key={i} className="flex items-start gap-3 rounded-md border bg-background p-3 cursor-pointer hover:bg-secondary/20"
+                    onClick={() => toggleProposedTask(i)}>
+                    <input
+                      type="checkbox"
+                      checked={selectedProposedTasks.has(i)}
+                      onChange={() => toggleProposedTask(i)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-3.5 w-3.5 mt-0.5 accent-green-500 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium">{task.title}</span>
+                        <Badge variant="outline" className={cn("text-xs shrink-0",
+                          task.priority === "high" ? "border-red-500/40 text-red-400" :
+                          task.priority === "medium" ? "border-yellow-500/40 text-yellow-400" :
+                          "border-green-500/40 text-green-400"
+                        )}>{task.priority}</Badge>
+                        {task.phase && <span className="text-xs text-muted-foreground">{task.phase}</span>}
+                      </div>
+                      {task.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{task.description}</p>}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs h-8"
+                    onClick={handleAddTasksToKanban}
+                    disabled={isAddingTasks || selectedProposedTasks.size === 0}
+                  >
+                    {isAddingTasks
+                      ? <><RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />Adding...</>
+                      : <><Check className="h-3.5 w-3.5 mr-1" />Add {selectedProposedTasks.size} to Kanban</>}
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs"
+                    onClick={() => { setProposedTasks(null); setSelectedProposedTasks(new Set()); }}>
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Push success */}
           {pushResult && (
             <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 p-3">
@@ -591,6 +736,31 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
               {mode === "agent" ? <Zap className="h-4 w-4" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
+          {mode === "chat" && (
+            <div className="flex gap-1.5 mt-2 flex-wrap">
+              <button
+                onClick={() => handleQuickAction("Extract all actionable tasks from our discussion and propose them as Kanban tasks with priorities.")}
+                disabled={isLoading}
+                className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary/50 hover:bg-secondary text-xs text-muted-foreground transition-colors disabled:opacity-50"
+              >
+                <ListTodo className="h-3 w-3" />Extract Tasks
+              </button>
+              <button
+                onClick={() => handleQuickAction("Give me a quick standup summary: what tasks are done, what's in progress, and what might be blocked?")}
+                disabled={isLoading}
+                className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary/50 hover:bg-secondary text-xs text-muted-foreground transition-colors disabled:opacity-50"
+              >
+                <CalendarClock className="h-3 w-3" />Standup
+              </button>
+              <button
+                onClick={() => handleQuickAction("Based on the project goals and current tasks, which 3 tasks should we focus on first this week and why?")}
+                disabled={isLoading}
+                className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary/50 hover:bg-secondary text-xs text-muted-foreground transition-colors disabled:opacity-50"
+              >
+                <ArrowUpDown className="h-3 w-3" />Prioritize
+              </button>
+            </div>
+          )}
           {mode === "agent" && (
             <p className="text-xs text-muted-foreground mt-1.5">
               Agent will propose file changes — you review and confirm before pushing.
