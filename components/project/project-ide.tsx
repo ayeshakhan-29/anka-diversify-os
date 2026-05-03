@@ -151,7 +151,6 @@ interface ProjectIDEProps {
   onChangesApplied?: () => void;
 }
 
-type BottomTab = "terminal" | "browser";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -171,9 +170,9 @@ export function ProjectIDE({ project, pendingChanges, onChangesApplied }: Projec
   const [saveError, setSaveError] = useState<string | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
 
-  const [bottomTab, setBottomTab] = useState<BottomTab>("terminal");
   const [bottomHeight, setBottomHeight] = useState(220);
   const [showBottom, setShowBottom] = useState(true);
+  const [showBrowser, setShowBrowser] = useState(false);
   const [agentBanner, setAgentBanner] = useState<string | null>(null);
 
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
@@ -335,8 +334,8 @@ export function ProjectIDE({ project, pendingChanges, onChangesApplied }: Projec
         </div>
       </div>
 
-      {/* Editor + bottom panel */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-[#1e1e1e]">
+      {/* Editor + terminal */}
+      <div className="flex-1 flex flex-col overflow-hidden bg-[#1e1e1e] min-w-0">
         {/* Agent banner */}
         {agentBanner && (
           <div className="flex items-center justify-between gap-2 px-4 py-2 bg-violet-600/20 border-b border-violet-500/30 shrink-0">
@@ -358,7 +357,7 @@ export function ProjectIDE({ project, pendingChanges, onChangesApplied }: Projec
                   <FileText className={cn("h-3 w-3 shrink-0", fileColor(file.path.split("/").pop() || ""))} />
                   <span className="truncate">{file.path.split("/").pop()}</span>
                   {modified && <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 shrink-0" />}
-                  <X className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100"
+                  <X className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-60 hover:opacity-100"
                     onClick={(e) => handleCloseTab(file.path, e)} />
                 </button>
               );
@@ -433,19 +432,17 @@ export function ProjectIDE({ project, pendingChanges, onChangesApplied }: Projec
             className="h-1 bg-white/10 hover:bg-primary/50 cursor-row-resize shrink-0 transition-colors" />
         )}
 
-        {/* Bottom panel */}
+        {/* Terminal panel */}
         <div className="shrink-0 border-t border-white/10 overflow-hidden bg-[#0d1117]"
           style={{ height: showBottom ? `${bottomHeight}px` : "32px" }}>
-          {/* Bottom tab bar */}
           <div className="flex items-center border-b border-white/10 bg-[#161b22] shrink-0 h-8">
-            <button onClick={() => { setBottomTab("terminal"); setShowBottom(true); }}
-              className={cn("flex items-center gap-1.5 px-3 h-full text-xs border-r border-white/10 hover:bg-white/5",
-                bottomTab === "terminal" && showBottom ? "text-foreground bg-[#0d1117]" : "text-muted-foreground")}>
+            <span className="flex items-center gap-1.5 px-3 h-full text-xs text-foreground border-r border-white/10">
               <Terminal className="h-3.5 w-3.5" />Terminal
-            </button>
-            <button onClick={() => { setBottomTab("browser"); setShowBottom(true); }}
+            </span>
+            <button
+              onClick={() => setShowBrowser((v) => !v)}
               className={cn("flex items-center gap-1.5 px-3 h-full text-xs border-r border-white/10 hover:bg-white/5",
-                bottomTab === "browser" && showBottom ? "text-foreground bg-[#0d1117]" : "text-muted-foreground")}>
+                showBrowser ? "text-foreground bg-[#0d1117]" : "text-muted-foreground")}>
               <Globe className="h-3.5 w-3.5" />Browser
             </button>
             <button onClick={() => setShowBottom((v) => !v)}
@@ -453,15 +450,29 @@ export function ProjectIDE({ project, pendingChanges, onChangesApplied }: Projec
               {showBottom ? "▾" : "▴"}
             </button>
           </div>
-
-          {showBottom && (
-            <div className="overflow-hidden" style={{ height: `${bottomHeight - 32}px` }}>
-              {bottomTab === "terminal" && <TerminalPanel projectId={project.id} />}
-              {bottomTab === "browser" && <BrowserPanel />}
-            </div>
-          )}
+          {/* Always keep TerminalPanel in DOM so history is preserved */}
+          <div style={{ height: showBottom ? `${bottomHeight - 32}px` : "0px", overflow: "hidden" }}>
+            <TerminalPanel projectId={project.id} />
+          </div>
         </div>
       </div>
+
+      {/* Browser panel — separate right panel */}
+      {showBrowser && (
+        <div className="w-120 shrink-0 border-l border-white/10 flex flex-col bg-[#0d1117] overflow-hidden">
+          <div className="flex items-center justify-between px-3 h-8 border-b border-white/10 bg-[#161b22] shrink-0">
+            <span className="flex items-center gap-1.5 text-xs text-foreground">
+              <Globe className="h-3.5 w-3.5" />Browser
+            </span>
+            <button onClick={() => setShowBrowser(false)} className="text-muted-foreground hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <BrowserPanel />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -887,8 +887,13 @@ export default function ProjectDetailPage({
               </div>
             </TabsContent>
 
-            {/* ── Code (IDE) ── */}
-            <TabsContent value="code" className="mt-0 p-4">
+            {/* ── Code (IDE) ── forceMount keeps terminal alive across tab switches */}
+            <TabsContent
+              value="code"
+              className="mt-0 p-4"
+              forceMount
+              style={activeTab !== "code" ? { display: "none" } : undefined}
+            >
               <ProjectIDE
                 project={project}
                 pendingChanges={pendingAgentChanges}

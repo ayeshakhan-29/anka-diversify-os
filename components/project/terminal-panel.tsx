@@ -43,7 +43,6 @@ export function TerminalPanel({ projectId }: { height?: number; projectId?: stri
     ws.onclose = () => {
       if (destroyedRef.current) return;
       setStatus("disconnected");
-      // Auto-retry up to 5 times with backoff
       if (retryCount.current < 5) {
         const delay = Math.min(1000 * 2 ** retryCount.current, 15000);
         retryCount.current++;
@@ -57,12 +56,6 @@ export function TerminalPanel({ projectId }: { height?: number; projectId?: stri
     ws.onerror = () => {
       if (!destroyedRef.current) ws.close();
     };
-
-    term.onData((data: string) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "input", data }));
-      }
-    });
   }, []);
 
   const reconnect = useCallback(() => {
@@ -121,6 +114,14 @@ export function TerminalPanel({ projectId }: { height?: number; projectId?: stri
       termRef.current = term;
       fitRef.current = fitAddon;
 
+      // Register once — uses wsRef so reconnects don't stack up listeners
+      term.onData((data: string) => {
+        const ws = wsRef.current;
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "input", data }));
+        }
+      });
+
       connect();
 
       const ro = new ResizeObserver(() => {
@@ -134,14 +135,30 @@ export function TerminalPanel({ projectId }: { height?: number; projectId?: stri
       roCleanup = () => ro.disconnect();
     }
 
-    init();
+    // Defer xterm init until the container is actually visible in the DOM.
+    // Calling term.open() on a display:none element corrupts the canvas/input state.
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !termRef.current && !destroyedRef.current) {
+          io.disconnect();
+          init();
+        }
+      },
+      { threshold: 0 }
+    );
+
+    if (containerRef.current) {
+      io.observe(containerRef.current);
+    }
 
     return () => {
       destroyedRef.current = true;
+      io.disconnect();
       if (retryRef.current) clearTimeout(retryRef.current);
       roCleanup?.();
       wsRef.current?.close();
       termRef.current?.dispose();
+      termRef.current = null;
     };
   }, [connect]);
 
@@ -164,7 +181,7 @@ export function TerminalPanel({ projectId }: { height?: number; projectId?: stri
         )}
       </div>
 
-      {status === "connecting" && !termRef.current && (
+      {!termRef.current && (
         <div className="absolute inset-0 flex items-center justify-center z-10 bg-[#0d1117] top-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
