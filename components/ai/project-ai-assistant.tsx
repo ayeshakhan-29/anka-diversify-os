@@ -33,11 +33,17 @@ import {
   ListTodo,
   CalendarClock,
   ArrowUpDown,
+  GitPullRequest,
+  ShieldAlert,
+  ThumbsUp,
+  MessageCircle,
+  Plus,
+  Minus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AIService, type ProposedTask, type EpicProposal, type ProjectHealth } from "@/lib/ai-service";
 import { projectApi } from "@/lib/project-api";
-import { aiClient } from "@/lib/ai-client";
+import { aiClient, type PullRequest, type PRReview } from "@/lib/ai-client";
 import type { Project } from "@/lib/types";
 
 interface Message {
@@ -127,6 +133,13 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
   // Health score
   const [health, setHealth] = useState<ProjectHealth | null>(null);
 
+  // PR Review state
+  const [pullRequests, setPullRequests] = useState<PullRequest[] | null>(null);
+  const [prsLoading, setPrsLoading] = useState(false);
+  const [reviewingPR, setReviewingPR] = useState<number | null>(null);
+  const [prReviews, setPrReviews] = useState<Record<number, PRReview>>({});
+  const [activePrReview, setActivePrReview] = useState<number | null>(null);
+
   // Load chat history from backend on mount
   useEffect(() => {
     setHistoryLoading(true);
@@ -182,6 +195,33 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
   useEffect(() => {
     aiClient.getProjectHealth(project.id).then(setHealth).catch(() => {});
   }, [project.id]);
+
+  const loadPullRequests = async () => {
+    setPrsLoading(true);
+    try {
+      const { pullRequests: prs } = await aiClient.listPullRequests(project.id);
+      setPullRequests(prs);
+    } catch {
+      setPullRequests([]);
+    } finally {
+      setPrsLoading(false);
+    }
+  };
+
+  const handleReviewPR = async (prNumber: number) => {
+    if (prReviews[prNumber]) { setActivePrReview(prNumber); return; }
+    setReviewingPR(prNumber);
+    try {
+      const review = await aiClient.reviewPullRequest(project.id, prNumber);
+      setPrReviews((prev) => ({ ...prev, [prNumber]: review }));
+      setActivePrReview(prNumber);
+    } catch {
+      setPrReviews((prev) => ({ ...prev, [prNumber]: { summary: "Failed to load review.", risks: [], suggestions: [], verdict: "needs_discussion", qualityScore: 0 } }));
+      setActivePrReview(prNumber);
+    } finally {
+      setReviewingPR(null);
+    }
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -834,6 +874,71 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
             </div>
           )}
 
+          {/* PR Review panel */}
+          {activePrReview !== null && prReviews[activePrReview] && (() => {
+            const review = prReviews[activePrReview];
+            const pr = pullRequests?.find((p) => p.number === activePrReview);
+            const verdictColor = review.verdict === "approve" ? "green" : review.verdict === "request_changes" ? "red" : "yellow";
+            const VerdictIcon = review.verdict === "approve" ? ThumbsUp : review.verdict === "request_changes" ? ShieldAlert : MessageCircle;
+            return (
+              <div className="border border-white/10 rounded-lg overflow-hidden bg-secondary/20">
+                <div className="flex items-center justify-between px-4 py-3 bg-secondary/30 border-b border-white/10">
+                  <div className="flex items-center gap-2">
+                    <GitPullRequest className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium truncate">PR #{activePrReview}{pr ? `: ${pr.title}` : ""}</span>
+                  </div>
+                  <button onClick={() => setActivePrReview(null)} className="text-muted-foreground hover:text-foreground shrink-0">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="p-4 space-y-3">
+                  {/* Score + verdict */}
+                  <div className="flex items-center gap-3">
+                    <div className={cn("text-2xl font-bold", `text-${verdictColor}-400`)}>{review.qualityScore}</div>
+                    <div className={cn("flex items-center gap-1.5 text-sm font-medium", `text-${verdictColor}-400`)}>
+                      <VerdictIcon className="h-4 w-4" />
+                      {review.verdict === "approve" ? "Approve" : review.verdict === "request_changes" ? "Request Changes" : "Needs Discussion"}
+                    </div>
+                    {pr && (
+                      <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="text-green-400">+{pr.additions}</span>
+                        <span className="text-red-400">-{pr.deletions}</span>
+                        <span>{pr.changedFiles} files</span>
+                        <a href={pr.url} target="_blank" rel="noreferrer" className="hover:text-foreground">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                  {/* Summary */}
+                  <p className="text-sm text-muted-foreground">{review.summary}</p>
+                  {/* Risks */}
+                  {review.risks.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-red-400 uppercase tracking-wide">Risks</p>
+                      {review.risks.map((r, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-red-300">
+                          <ShieldAlert className="h-3.5 w-3.5 shrink-0 mt-0.5" />{r}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Suggestions */}
+                  {review.suggestions.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-yellow-400 uppercase tracking-wide">Suggestions</p>
+                      {review.suggestions.map((s, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-yellow-300">
+                          <Lightbulb className="h-3.5 w-3.5 shrink-0 mt-0.5" />{s}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Push success */}
           {pushResult && (
             <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 p-3">
@@ -946,6 +1051,63 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
             )}
           </CardContent>
         </Card>
+
+        {/* Pull Requests */}
+        {repoSnapshot && (
+          <Card>
+            <CardHeader className="pb-2 pt-3 px-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                  <GitPullRequest className="h-3 w-3" />Pull Requests
+                </CardTitle>
+                <button
+                  onClick={loadPullRequests}
+                  disabled={prsLoading}
+                  className="text-xs text-primary hover:underline disabled:opacity-50"
+                >
+                  {prsLoading ? <RefreshCw className="h-3 w-3 animate-spin" /> : pullRequests === null ? "Load" : <RefreshCw className="h-3 w-3" />}
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="px-3 pb-3">
+              {pullRequests === null ? (
+                <p className="text-xs text-muted-foreground">Click Load to fetch open PRs</p>
+              ) : pullRequests.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No open pull requests</p>
+              ) : (
+                <div className="space-y-2">
+                  {pullRequests.map((pr) => (
+                    <div key={pr.number} className="rounded-md border bg-secondary/20 p-2 space-y-1">
+                      <div className="flex items-start justify-between gap-1">
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium truncate">{pr.title}</p>
+                          <p className="text-xs text-muted-foreground">#{pr.number} · {pr.author}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-xs text-green-400 flex items-center gap-0.5"><Plus className="h-2.5 w-2.5" />{pr.additions}</span>
+                          <span className="text-xs text-red-400 flex items-center gap-0.5"><Minus className="h-2.5 w-2.5" />{pr.deletions}</span>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full h-6 text-xs"
+                        onClick={() => handleReviewPR(pr.number)}
+                        disabled={reviewingPR === pr.number}
+                      >
+                        {reviewingPR === pr.number
+                          ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" />Reviewing...</>
+                          : prReviews[pr.number]
+                          ? <><Check className="h-3 w-3 mr-1 text-green-400" />View Review</>
+                          : <><Sparkles className="h-3 w-3 mr-1" />AI Review</>}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Project Health Score */}
         {health && (
