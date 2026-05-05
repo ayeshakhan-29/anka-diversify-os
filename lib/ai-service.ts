@@ -1,6 +1,6 @@
-import { aiClient, type ProposedTask } from "./ai-client";
+import { aiClient, type ProposedTask, type EpicProposal, type ProjectHealth } from "./ai-client";
 
-export type { ProposedTask };
+export type { ProposedTask, EpicProposal, ProjectHealth };
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -21,6 +21,7 @@ export interface AIResponse {
   content: string;
   sessionId?: string;
   proposedTasks?: ProposedTask[];
+  proposedEpic?: EpicProposal;
 }
 
 // In-memory store for within-session history (lost on page refresh — backend is source of truth)
@@ -77,6 +78,7 @@ export class AIService {
       let sessionId: string;
 
       let proposedTasks: ProposedTask[] | undefined;
+      let proposedEpic: EpicProposal | undefined;
 
       if (type === "project" && projectId) {
         const res = await aiClient.sendProjectMessage(projectId, {
@@ -87,6 +89,7 @@ export class AIService {
         responseText = res.message;
         sessionId = res.sessionId;
         proposedTasks = res.proposedTasks;
+        proposedEpic = res.proposedEpic;
       } else {
         const res = await aiClient.sendGeneralMessage({
           message: userMessage,
@@ -99,7 +102,7 @@ export class AIService {
       context.messages.push({ role: "assistant", content: responseText, timestamp: new Date() });
       context.lastUpdated = new Date();
 
-      return { content: responseText, sessionId, proposedTasks };
+      return { content: responseText, sessionId, proposedTasks, proposedEpic };
     } catch (error) {
       console.error("AIService.sendMessage error:", error);
       // Roll back the user message on failure

@@ -35,7 +35,7 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AIService, type ProposedTask } from "@/lib/ai-service";
+import { AIService, type ProposedTask, type EpicProposal, type ProjectHealth } from "@/lib/ai-service";
 import { projectApi } from "@/lib/project-api";
 import { aiClient } from "@/lib/ai-client";
 import type { Project } from "@/lib/types";
@@ -119,6 +119,14 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
   const [selectedProposedTasks, setSelectedProposedTasks] = useState<Set<number>>(new Set());
   const [isAddingTasks, setIsAddingTasks] = useState(false);
 
+  // Epic proposal state
+  const [proposedEpic, setProposedEpic] = useState<EpicProposal | null>(null);
+  const [selectedEpicTasks, setSelectedEpicTasks] = useState<Set<number>>(new Set());
+  const [isAddingEpic, setIsAddingEpic] = useState(false);
+
+  // Health score
+  const [health, setHealth] = useState<ProjectHealth | null>(null);
+
   // Load chat history from backend on mount
   useEffect(() => {
     setHistoryLoading(true);
@@ -172,6 +180,10 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
   }, [project.id]);
 
   useEffect(() => {
+    aiClient.getProjectHealth(project.id).then(setHealth).catch(() => {});
+  }, [project.id]);
+
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
@@ -203,6 +215,8 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
     setAgentResult(null);
     setPushResult(null);
     setPushError(null);
+    setProposedTasks(null);
+    setProposedEpic(null);
 
     if (mode === "chat") {
       const userMessage: Message = {
@@ -222,6 +236,10 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
         if (response.proposedTasks?.length) {
           setProposedTasks(response.proposedTasks);
           setSelectedProposedTasks(new Set(response.proposedTasks.map((_, i) => i)));
+        }
+        if (response.proposedEpic) {
+          setProposedEpic(response.proposedEpic);
+          setSelectedEpicTasks(new Set(response.proposedEpic.tasks.map((_, i) => i)));
         }
       } finally {
         setIsLoading(false);
@@ -362,10 +380,56 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
     }
   };
 
+  const toggleEpicTask = (i: number) => {
+    setSelectedEpicTasks((prev) => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  };
+
+  const handleAddEpicToKanban = async () => {
+    if (!proposedEpic || selectedEpicTasks.size === 0) return;
+    setIsAddingEpic(true);
+    const tasksToAdd = proposedEpic.tasks.filter((_, i) => selectedEpicTasks.has(i));
+    try {
+      await Promise.all(
+        tasksToAdd.map((task) =>
+          projectApi.createTask(project.id, {
+            title: task.title,
+            description: [task.userStory, task.description].filter(Boolean).join("\n\n"),
+            priority: task.priority,
+            phase: task.phase || project.phase || undefined,
+            status: "todo",
+          })
+        )
+      );
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `Added **${tasksToAdd.length} tasks** from the **${proposedEpic.title}** epic to the Kanban board.`,
+          timestamp: new Date(),
+        },
+      ]);
+      setProposedEpic(null);
+      setSelectedEpicTasks(new Set());
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), role: "assistant", content: `Failed to add epic tasks: ${err instanceof Error ? err.message : "Unknown error"}`, timestamp: new Date() },
+      ]);
+    } finally {
+      setIsAddingEpic(false);
+    }
+  };
+
   const handleQuickAction = async (prompt: string) => {
     if (isLoading) return;
     setIsLoading(true);
     setProposedTasks(null);
+    setProposedEpic(null);
     setMessages((prev) => [
       ...prev,
       { id: Date.now().toString(), role: "user", content: prompt, timestamp: new Date() },
@@ -379,6 +443,10 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
       if (response.proposedTasks?.length) {
         setProposedTasks(response.proposedTasks);
         setSelectedProposedTasks(new Set(response.proposedTasks.map((_, i) => i)));
+      }
+      if (response.proposedEpic) {
+        setProposedEpic(response.proposedEpic);
+        setSelectedEpicTasks(new Set(response.proposedEpic.tasks.map((_, i) => i)));
       }
     } finally {
       setIsLoading(false);
@@ -703,6 +771,69 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
             </div>
           )}
 
+          {/* Epic proposal card */}
+          {proposedEpic && (
+            <div className="border border-blue-500/30 rounded-lg overflow-hidden bg-blue-500/5">
+              <div className="flex items-center justify-between px-4 py-3 bg-blue-500/10 border-b border-blue-500/20">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-blue-400" />
+                  <div>
+                    <span className="text-sm font-medium">{proposedEpic.title}</span>
+                    <span className="text-xs text-muted-foreground ml-2">— {proposedEpic.tasks.length} tasks</span>
+                  </div>
+                </div>
+                <button onClick={() => { setProposedEpic(null); setSelectedEpicTasks(new Set()); }} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-4 space-y-2">
+                <p className="text-xs text-muted-foreground">{proposedEpic.description}</p>
+                {proposedEpic.tasks.map((task, i) => (
+                  <div key={i}
+                    className="flex items-start gap-3 rounded-md border bg-background p-3 cursor-pointer hover:bg-secondary/20"
+                    onClick={() => toggleEpicTask(i)}>
+                    <input
+                      type="checkbox"
+                      checked={selectedEpicTasks.has(i)}
+                      onChange={() => toggleEpicTask(i)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-3.5 w-3.5 mt-0.5 accent-blue-500 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium">{task.title}</span>
+                        <Badge variant="outline" className={cn("text-xs shrink-0",
+                          task.priority === "high" ? "border-red-500/40 text-red-400" :
+                          task.priority === "medium" ? "border-yellow-500/40 text-yellow-400" :
+                          "border-green-500/40 text-green-400"
+                        )}>{task.priority}</Badge>
+                        {task.phase && <span className="text-xs text-muted-foreground">{task.phase}</span>}
+                      </div>
+                      {task.userStory && <p className="text-xs text-blue-400/80 mt-0.5 italic">{task.userStory}</p>}
+                      {task.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{task.description}</p>}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-8"
+                    onClick={handleAddEpicToKanban}
+                    disabled={isAddingEpic || selectedEpicTasks.size === 0}
+                  >
+                    {isAddingEpic
+                      ? <><RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />Adding...</>
+                      : <><Check className="h-3.5 w-3.5 mr-1" />Add {selectedEpicTasks.size} tasks to Kanban</>}
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs"
+                    onClick={() => { setProposedEpic(null); setSelectedEpicTasks(new Set()); }}>
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Push success */}
           {pushResult && (
             <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 p-3">
@@ -759,6 +890,13 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
               >
                 <ArrowUpDown className="h-3 w-3" />Prioritize
               </button>
+              <button
+                onClick={() => handleQuickAction("Generate a full epic breakdown for the next major feature we should build based on the project context and current tasks.")}
+                disabled={isLoading}
+                className="flex items-center gap-1 px-2 py-1 rounded-md bg-blue-500/10 hover:bg-blue-500/20 text-xs text-blue-400 transition-colors disabled:opacity-50"
+              >
+                <Sparkles className="h-3 w-3" />Generate Epic
+              </button>
             </div>
           )}
           {mode === "agent" && (
@@ -809,6 +947,52 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
           </CardContent>
         </Card>
 
+        {/* Project Health Score */}
+        {health && (
+          <Card>
+            <CardHeader className="pb-2 pt-3 px-3">
+              <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                <Sparkles className="h-3 w-3" />Project Health
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-3 pb-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className={cn("text-2xl font-bold",
+                  health.status === "healthy" ? "text-green-400" :
+                  health.status === "warning" ? "text-yellow-400" : "text-red-400"
+                )}>{health.score}</div>
+                <div>
+                  <div className={cn("text-xs font-medium capitalize",
+                    health.status === "healthy" ? "text-green-400" :
+                    health.status === "warning" ? "text-yellow-400" : "text-red-400"
+                  )}>{health.status}</div>
+                  <div className="text-xs text-muted-foreground">{health.stats.completionRate}% done</div>
+                </div>
+              </div>
+              {health.flags.length > 0 && (
+                <div className="space-y-1">
+                  {health.flags.map((flag, i) => (
+                    <div key={i} className="flex items-start gap-1 text-xs text-yellow-400">
+                      <span className="shrink-0 mt-0.5">⚠</span>{flag}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {health.stats.overdueTasks > 0 && (
+                <div className="text-xs text-red-400 font-medium">{health.stats.overdueTasks} overdue</div>
+              )}
+              {health.recommendations.length > 0 && (
+                <button
+                  className="text-xs text-primary hover:underline text-left"
+                  onClick={() => handleQuickAction(`My project health score is ${health.score}/100 with these flags: ${health.flags.join(", ")}. Give me specific actionable steps to improve it.`)}
+                >
+                  Get recommendations →
+                </button>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Project context */}
         <Card>
           <CardHeader className="pb-2 pt-3 px-3">
@@ -827,6 +1011,12 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
               <span className="text-muted-foreground">Progress</span>
               <span>{project.progress}%</span>
             </div>
+            {health && health.stats.overdueTasks > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Overdue</span>
+                <span className="text-red-400 font-medium">{health.stats.overdueTasks}</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
