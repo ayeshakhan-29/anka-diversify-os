@@ -39,6 +39,8 @@ export interface Task {
   dueDate: string;
   createdAt: string;
   tags: string[];
+  blockingIds?: string[];
+  blockedByIds?: string[];
 }
 
 export interface TeamMember {

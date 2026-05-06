@@ -67,6 +67,8 @@ import {
   Send,
   X,
   UserPlus,
+  GitMerge,
+  Unlink,
 } from "lucide-react";
 import Link from "next/link";
 import { Image } from "lucide-react";
@@ -705,6 +707,18 @@ export default function ProjectDetailPage({
                                       </Avatar>
                                     )}
                                     <div className={`h-2 w-2 rounded-full ${priorityColors[task.priority]}`} />
+                                    {(task.blockedByIds?.length ?? 0) > 0 && (
+                                      <span className="flex items-center gap-0.5 text-xs text-red-400" title={`Blocked by ${task.blockedByIds!.length} task(s)`}>
+                                        <GitMerge className="h-3 w-3" />
+                                        {task.blockedByIds!.length}
+                                      </span>
+                                    )}
+                                    {(task.blockingIds?.length ?? 0) > 0 && (
+                                      <span className="flex items-center gap-0.5 text-xs text-yellow-400" title={`Blocking ${task.blockingIds!.length} task(s)`}>
+                                        <GitMerge className="h-3 w-3 rotate-180" />
+                                        {task.blockingIds!.length}
+                                      </span>
+                                    )}
                                   </div>
                                   {task.dueDate && (
                                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -1327,6 +1341,83 @@ export default function ProjectDetailPage({
                     </Badge>
                   </div>
                 </div>
+                {/* Dependencies */}
+                <div className="pt-4 border-t">
+                  <h5 className="font-medium mb-3 flex items-center gap-2">
+                    <GitMerge className="h-4 w-4" />Dependencies
+                  </h5>
+                  <div className="space-y-2 mb-3">
+                    {(selectedTask.blockedByIds ?? []).length > 0 && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Blocked by</p>
+                        {selectedTask.blockedByIds!.map((blockingId) => {
+                          const blocker = tasks.find((t) => t.id === blockingId);
+                          return (
+                            <div key={blockingId} className="flex items-center justify-between text-xs bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 mb-1">
+                              <span className="text-red-400 truncate">{blocker?.title || blockingId}</span>
+                              <button
+                                onClick={async () => {
+                                  await projectApi.removeDependency(project.id, selectedTask.id, blockingId);
+                                  setTasks((prev) => prev.map((t) => t.id === selectedTask.id ? { ...t, blockedByIds: t.blockedByIds?.filter((id) => id !== blockingId) } : t));
+                                }}
+                                className="ml-2 text-muted-foreground hover:text-destructive shrink-0"
+                              >
+                                <Unlink className="h-3 w-3" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {(selectedTask.blockingIds ?? []).length > 0 && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Blocking</p>
+                        {selectedTask.blockingIds!.map((blockedId) => {
+                          const blocked = tasks.find((t) => t.id === blockedId);
+                          return (
+                            <div key={blockedId} className="flex items-center justify-between text-xs bg-yellow-500/10 border border-yellow-500/20 rounded px-2 py-1.5 mb-1">
+                              <span className="text-yellow-400 truncate">{blocked?.title || blockedId}</span>
+                              <button
+                                onClick={async () => {
+                                  await projectApi.removeDependency(project.id, blockedId, selectedTask.id);
+                                  setTasks((prev) => prev.map((t) => t.id === selectedTask.id ? { ...t, blockingIds: t.blockingIds?.filter((id) => id !== blockedId) } : t));
+                                }}
+                                className="ml-2 text-muted-foreground hover:text-destructive shrink-0"
+                              >
+                                <Unlink className="h-3 w-3" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <Select
+                      onValueChange={async (blockingTaskId) => {
+                        await projectApi.addDependency(project.id, selectedTask.id, blockingTaskId);
+                        setTasks((prev) => prev.map((t) => t.id === selectedTask.id
+                          ? { ...t, blockedByIds: [...(t.blockedByIds ?? []), blockingTaskId] }
+                          : t.id === blockingTaskId
+                          ? { ...t, blockingIds: [...(t.blockingIds ?? []), selectedTask.id] }
+                          : t
+                        ));
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-xs">
+                        <SelectValue placeholder="+ Add blocker..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tasks
+                          .filter((t) => t.id !== selectedTask.id && !(selectedTask.blockedByIds ?? []).includes(t.id))
+                          .map((t) => (
+                            <SelectItem key={t.id} value={t.id} className="text-xs">
+                              {t.title}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 <div className="pt-4 border-t">
                   <h5 className="font-medium mb-3">Comments</h5>
                   <div className="space-y-3 mb-3">

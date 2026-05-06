@@ -65,6 +65,8 @@ function mapTask(t: any, projectId: string): Task {
     dueDate: t.dueDate ? new Date(t.dueDate).toISOString() : "",
     createdAt: t.createdAt ? new Date(t.createdAt).toISOString() : "",
     tags: [],
+    blockingIds: t.blockingIds || [],
+    blockedByIds: t.blockedByIds || [],
   };
 }
 
@@ -505,6 +507,25 @@ export const projectApi = {
       headers: getHeaders(),
     });
     if (!res.ok) throw new Error(`DELETE sprint task failed: ${res.status}`);
+  },
+
+  // ── Task Dependencies ───────────────────────────────────────────────────────
+
+  async addDependency(projectId: string, blockedTaskId: string, blockingTaskId: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks/${blockedTaskId}/dependencies`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ blockingTaskId }),
+    });
+    if (!res.ok) throw new Error(`Add dependency failed: ${res.status}`);
+  },
+
+  async removeDependency(projectId: string, blockedTaskId: string, blockingTaskId: string): Promise<void> {
+    const res = await fetch(
+      `${BASE_URL}/projects/${projectId}/tasks/${blockedTaskId}/dependencies/${blockingTaskId}`,
+      { method: "DELETE", headers: getHeaders() },
+    );
+    if (!res.ok) throw new Error(`Remove dependency failed: ${res.status}`);
   },
 
   // ── Notifications ───────────────────────────────────────────────────────────
