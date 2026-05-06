@@ -1,4 +1,4 @@
-import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember } from "./types";
+import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember, Sprint } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
@@ -67,6 +67,19 @@ function mapProject(p: any): Project {
       status: m.user?.status || "active",
       joinedAt: m.joinedAt,
     })) as ProjectMember[],
+  };
+}
+
+function mapSprint(s: any, projectId: string): Sprint {
+  return {
+    id: s.id,
+    name: s.name,
+    projectId: s.projectId || projectId,
+    startDate: s.startDate ? new Date(s.startDate).toISOString() : "",
+    endDate: s.endDate ? new Date(s.endDate).toISOString() : "",
+    status: s.status as Sprint["status"],
+    velocity: s.velocity ?? 0,
+    tasks: (s.tasks || []).map((t: any) => mapTask(t, s.projectId || projectId)),
   };
 }
 
@@ -397,5 +410,74 @@ export const projectApi = {
       headers: getHeaders(),
     });
     if (!res.ok) throw new Error(`DELETE comment failed: ${res.status}`);
+  },
+
+  // ── Sprints ────────────────────────────────────────────────────────────────
+
+  async getSprints(projectId: string): Promise<Sprint[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/sprints`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET sprints failed: ${res.status}`);
+    const { data } = await res.json();
+    return (data as any[]).map((s) => mapSprint(s, projectId));
+  },
+
+  async createSprint(projectId: string, data: {
+    name: string;
+    goal?: string;
+    startDate: string;
+    endDate: string;
+    velocity?: number;
+  }): Promise<Sprint> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/sprints`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(`POST sprint failed: ${res.status}`);
+    const { data: sprint } = await res.json();
+    return mapSprint(sprint, projectId);
+  },
+
+  async updateSprint(projectId: string, sprintId: string, data: Partial<{
+    name: string;
+    goal: string;
+    startDate: string;
+    endDate: string;
+    status: string;
+    velocity: number;
+  }>): Promise<Sprint> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/sprints/${sprintId}`, {
+      method: "PUT",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(`PUT sprint failed: ${res.status}`);
+    const { data: sprint } = await res.json();
+    return mapSprint(sprint, projectId);
+  },
+
+  async deleteSprint(projectId: string, sprintId: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/sprints/${sprintId}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error(`DELETE sprint failed: ${res.status}`);
+  },
+
+  async addTaskToSprint(projectId: string, sprintId: string, taskId: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/sprints/${sprintId}/tasks`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ taskId }),
+    });
+    if (!res.ok) throw new Error(`POST sprint task failed: ${res.status}`);
+  },
+
+  async removeTaskFromSprint(projectId: string, sprintId: string, taskId: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/sprints/${sprintId}/tasks/${taskId}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error(`DELETE sprint task failed: ${res.status}`);
   },
 };
