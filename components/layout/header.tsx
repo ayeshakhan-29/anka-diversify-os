@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Search, Plus, ChevronDown } from "lucide-react";
@@ -18,6 +18,7 @@ import {
 import { NotificationsPanel } from "@/components/notifications-panel";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { projectApi } from "@/lib/project-api";
 
 interface HeaderProps {
   title?: string;
@@ -26,8 +27,16 @@ interface HeaderProps {
 
 export function Header({ title, breadcrumb }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
-  const [unreadCount] = useState(3);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { user, logout } = useAuth();
+
+  useEffect(() => {
+    projectApi.getUnreadCount().then(setUnreadCount).catch(() => {});
+    const interval = setInterval(() => {
+      projectApi.getUnreadCount().then(setUnreadCount).catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
   const router = useRouter();
 
   const handleSignOut = () => {

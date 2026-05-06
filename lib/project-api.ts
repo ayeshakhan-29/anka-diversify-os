@@ -1,5 +1,31 @@
 import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember, Sprint } from "./types";
 
+export interface AppNotification {
+  id: string;
+  type: "mention" | "comment" | "assignment" | "alert" | "system";
+  title: string;
+  message: string;
+  link?: string;
+  read: boolean;
+  entityId?: string;
+  entityType?: string;
+  createdAt: string;
+}
+
+function mapNotification(n: any): AppNotification {
+  return {
+    id: n.id,
+    type: n.type,
+    title: n.title,
+    message: n.message,
+    link: n.link,
+    read: n.read,
+    entityId: n.entityId,
+    entityType: n.entityType,
+    createdAt: n.createdAt,
+  };
+}
+
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
 function getHeaders(): Record<string, string> {
@@ -479,5 +505,33 @@ export const projectApi = {
       headers: getHeaders(),
     });
     if (!res.ok) throw new Error(`DELETE sprint task failed: ${res.status}`);
+  },
+
+  // ── Notifications ───────────────────────────────────────────────────────────
+
+  async getNotifications(): Promise<AppNotification[]> {
+    const res = await fetch(`${BASE_URL}/notifications`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET notifications failed: ${res.status}`);
+    const { data } = await res.json();
+    return (data as any[]).map(mapNotification);
+  },
+
+  async getUnreadCount(): Promise<number> {
+    const res = await fetch(`${BASE_URL}/notifications/unread-count`, { headers: getHeaders() });
+    if (!res.ok) return 0;
+    const { count } = await res.json();
+    return count as number;
+  },
+
+  async markNotificationRead(id: string): Promise<void> {
+    await fetch(`${BASE_URL}/notifications/${id}/read`, { method: "PUT", headers: getHeaders() });
+  },
+
+  async markAllNotificationsRead(): Promise<void> {
+    await fetch(`${BASE_URL}/notifications/read-all`, { method: "PUT", headers: getHeaders() });
+  },
+
+  async deleteNotification(id: string): Promise<void> {
+    await fetch(`${BASE_URL}/notifications/${id}`, { method: "DELETE", headers: getHeaders() });
   },
 };
