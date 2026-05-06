@@ -68,6 +68,7 @@ export class AIService {
     projectId?: string,
     projectName?: string,
     mode?: "chat" | "code",
+    signal?: AbortSignal,
   ): Promise<AIResponse> {
     const context = this.getChatContext(contextId, type, projectId, projectName);
 
@@ -81,20 +82,20 @@ export class AIService {
       let proposedEpic: EpicProposal | undefined;
 
       if (type === "project" && projectId) {
-        const res = await aiClient.sendProjectMessage(projectId, {
-          message: userMessage,
-          sessionId: contextId,
-          context: mode ? { mode } : undefined,
-        });
+        const res = await aiClient.sendProjectMessage(
+          projectId,
+          { message: userMessage, sessionId: contextId, context: mode ? { mode } : undefined },
+          signal,
+        );
         responseText = res.message;
         sessionId = res.sessionId;
         proposedTasks = res.proposedTasks;
         proposedEpic = res.proposedEpic;
       } else {
-        const res = await aiClient.sendGeneralMessage({
-          message: userMessage,
-          sessionId: contextId,
-        });
+        const res = await aiClient.sendGeneralMessage(
+          { message: userMessage, sessionId: contextId },
+          signal,
+        );
         responseText = res.message;
         sessionId = res.sessionId;
       }
@@ -104,9 +105,11 @@ export class AIService {
 
       return { content: responseText, sessionId, proposedTasks, proposedEpic };
     } catch (error) {
-      console.error("AIService.sendMessage error:", error);
-      // Roll back the user message on failure
       context.messages.pop();
+      if (error instanceof Error && error.name === "AbortError") {
+        return { content: "" };
+      }
+      console.error("AIService.sendMessage error:", error);
       return {
         content: "I encountered an error while processing your request. Please try again.",
       };

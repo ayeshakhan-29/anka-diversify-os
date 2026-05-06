@@ -178,7 +178,7 @@ class AIClient {
     };
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}, signal?: AbortSignal): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = {
       ...this.getHeaders(),
@@ -189,6 +189,7 @@ class AIClient {
       const response = await fetch(url, {
         ...options,
         headers,
+        signal,
       });
 
       if (!response.ok) {
@@ -198,17 +199,18 @@ class AIClient {
 
       return await response.json();
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") throw error;
       console.error(`AI Client Error (${endpoint}):`, error);
       throw error;
     }
   }
 
   // General Assistant Methods
-  async sendGeneralMessage(request: ChatRequest): Promise<ChatResponse> {
+  async sendGeneralMessage(request: ChatRequest, signal?: AbortSignal): Promise<ChatResponse> {
     return this.request<ChatResponse>('/general/chat', {
       method: 'POST',
       body: JSON.stringify(request),
-    });
+    }, signal);
   }
 
   async getGeneralSessions(): Promise<SessionListResponse> {
@@ -220,11 +222,11 @@ class AIClient {
   }
 
   // Project Assistant Methods
-  async sendProjectMessage(projectId: string, request: ChatRequest): Promise<ChatResponse> {
+  async sendProjectMessage(projectId: string, request: ChatRequest, signal?: AbortSignal): Promise<ChatResponse> {
     return this.request<ChatResponse>(`/projects/${projectId}/chat`, {
       method: 'POST',
       body: JSON.stringify(request),
-    });
+    }, signal);
   }
 
   async getProjectSessions(projectId: string): Promise<SessionListResponse> {
