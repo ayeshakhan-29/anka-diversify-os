@@ -33,6 +33,9 @@ import {
   MoreHorizontal,
   TrendingUp,
   Target,
+  Sparkles,
+  Loader2,
+  X,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -42,8 +45,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { projectApi } from "@/lib/project-api"
+import { aiClient } from "@/lib/ai-client"
 import type { Sprint, Project } from "@/lib/types"
 import { cn } from "@/lib/utils"
+
+interface SprintSuggestion {
+  taskId: string;
+  title: string;
+  reason: string;
+  priority: string;
+}
 
 const statusColors: Record<string, string> = {
   planning: "bg-muted text-muted-foreground",
@@ -150,6 +161,35 @@ export default function SprintsPage() {
       setSprints((prev) => prev.map((s) => (s.id === sprint.id ? updated : s)))
     } catch (err) {
       console.error("Failed to complete sprint:", err)
+    }
+  }
+
+  const [suggestions, setSuggestions] = useState<Record<string, SprintSuggestion[]>>({})
+  const [loadingSuggestions, setLoadingSuggestions] = useState<string | null>(null)
+
+  async function handleSuggestTasks(sprint: Sprint) {
+    setLoadingSuggestions(sprint.id)
+    try {
+      const result = await aiClient.suggestSprintTasks(sprint.projectId, sprint.id)
+      setSuggestions((prev) => ({ ...prev, [sprint.id]: result }))
+    } catch (err) {
+      console.error("Failed to get suggestions:", err)
+    } finally {
+      setLoadingSuggestions(null)
+    }
+  }
+
+  async function handleAddSuggestedTask(sprint: Sprint, taskId: string) {
+    try {
+      await projectApi.addTaskToSprint(sprint.projectId, sprint.id, taskId)
+      setSuggestions((prev) => ({
+        ...prev,
+        [sprint.id]: (prev[sprint.id] || []).filter((s) => s.taskId !== taskId),
+      }))
+      const updated = await projectApi.getSprints(sprint.projectId)
+      setSprints((prev) => [...prev.filter((s) => s.projectId !== sprint.projectId), ...updated])
+    } catch (err) {
+      console.error("Failed to add task:", err)
     }
   }
 
@@ -430,9 +470,9 @@ export default function SprintsPage() {
                                   <Target className="h-4 w-4 mr-2" />
                                   View Board
                                 </DropdownMenuItem>
-                                <DropdownMenuItem>
-                                  <Calendar className="h-4 w-4 mr-2" />
-                                  Edit Sprint
+                                <DropdownMenuItem onClick={() => handleSuggestTasks(sprint)}>
+                                  <Sparkles className="h-4 w-4 mr-2" />
+                                  AI Suggest Tasks
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => handleCompleteSprint(sprint)}>
@@ -448,6 +488,40 @@ export default function SprintsPage() {
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
+
+                          {/* AI Suggestions Panel */}
+                          {loadingSuggestions === sprint.id && (
+                            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground border border-dashed rounded-lg p-3">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              AI is analyzing tasks...
+                            </div>
+                          )}
+                          {suggestions[sprint.id]?.length > 0 && (
+                            <div className="mt-4 border border-primary/20 rounded-lg bg-primary/5 overflow-hidden">
+                              <div className="flex items-center justify-between px-4 py-2 bg-primary/10 border-b border-primary/20">
+                                <span className="text-sm font-medium flex items-center gap-2">
+                                  <Sparkles className="h-4 w-4 text-primary" />
+                                  AI suggests {suggestions[sprint.id].length} tasks for this sprint
+                                </span>
+                                <button onClick={() => setSuggestions((p) => ({ ...p, [sprint.id]: [] }))} className="text-muted-foreground hover:text-foreground">
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                              <div className="p-3 space-y-2">
+                                {suggestions[sprint.id].map((s) => (
+                                  <div key={s.taskId} className="flex items-start justify-between gap-3 rounded border bg-background p-2.5">
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium truncate">{s.title}</p>
+                                      <p className="text-xs text-muted-foreground mt-0.5">{s.reason}</p>
+                                    </div>
+                                    <Button size="sm" className="h-7 text-xs shrink-0" onClick={() => handleAddSuggestedTask(sprint, s.taskId)}>
+                                      Add
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     )

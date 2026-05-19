@@ -5,7 +5,9 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Bot, RotateCcw, Sparkles, Zap, MessageSquare, Loader2, Check, ExternalLink } from "lucide-react";
+import { Bot, RotateCcw, Sparkles, Zap, MessageSquare, Loader2, Check, ExternalLink, FileText, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { AIService, type ProposedTask, type EpicProposal, type ProjectHealth } from "@/lib/ai-service";
 import { projectApi } from "@/lib/project-api";
@@ -17,6 +19,7 @@ import { ChatMessage } from "./chat-message";
 import { AgentDiffPanel } from "./agent-diff-panel";
 import { TaskProposalCard } from "./task-proposal-card";
 import { EpicProposalCard } from "./epic-proposal-card";
+import { SprintProposalCard, type SprintProposal } from "./sprint-proposal-card";
 import { PRReviewPanel } from "./pr-review-panel";
 import { AISidebar } from "./ai-sidebar";
 import { ChatInput } from "./chat-input";
@@ -77,6 +80,15 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
   const [proposedEpic, setProposedEpic] = useState<EpicProposal | null>(null);
   const [selectedEpicTasks, setSelectedEpicTasks] = useState<Set<number>>(new Set());
   const [isAddingEpic, setIsAddingEpic] = useState(false);
+
+  // Meeting notes
+  const [meetingNotesOpen, setMeetingNotesOpen] = useState(false);
+  const [meetingNotesText, setMeetingNotesText] = useState("");
+
+  // Sprint proposal
+  const [sprintProposal, setSprintProposal] = useState<SprintProposal | null>(null);
+  const [selectedSprintTasks, setSelectedSprintTasks] = useState<Set<string>>(new Set());
+  const [isCreatingSprint, setIsCreatingSprint] = useState(false);
 
   // Health + PRs
   const [health, setHealth] = useState<ProjectHealth | null>(null);
@@ -389,6 +401,87 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
     }
   };
 
+  const handleGenerateSprint = async (prompt: string) => {
+    if (isLoading) return;
+    setIsLoading(true);
+    setSprintProposal(null);
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now().toString(), role: "user", content: prompt, timestamp: new Date() },
+    ]);
+    try {
+      const proposal = await aiClient.generateSprint(project.id, prompt);
+      setSprintProposal(proposal);
+      setSelectedSprintTasks(new Set(proposal.suggestedTasks.map((t) => t.taskId)));
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: `Here's a sprint plan: **${proposal.name}** (${proposal.startDate} → ${proposal.endDate}).\n\n${proposal.goal}\n\nI've selected ${proposal.suggestedTasks.length} tasks — review and confirm below.`,
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { id: (Date.now() + 1).toString(), role: "assistant", content: `Failed to generate sprint: ${err instanceof Error ? err.message : "Unknown error"}`, timestamp: new Date() },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateSprint = async () => {
+    if (!sprintProposal) return;
+    setIsCreatingSprint(true);
+    try {
+      const sprint = await projectApi.createSprint(project.id, {
+        name: sprintProposal.name,
+        goal: sprintProposal.goal,
+        startDate: sprintProposal.startDate,
+        endDate: sprintProposal.endDate,
+      });
+      const tasksToAdd = sprintProposal.suggestedTasks.filter((t) => selectedSprintTasks.has(t.taskId));
+      await Promise.all(tasksToAdd.map((t) => projectApi.addTaskToSprint(project.id, sprint.id, t.taskId)));
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `Sprint **${sprint.name}** created with ${tasksToAdd.length} task${tasksToAdd.length !== 1 ? "s" : ""}. Head to the Sprints tab to see it.`,
+          timestamp: new Date(),
+        },
+      ]);
+      setSprintProposal(null);
+      setSelectedSprintTasks(new Set());
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), role: "assistant", content: `Failed to create sprint: ${err instanceof Error ? err.message : "Unknown error"}`, timestamp: new Date() },
+      ]);
+    } finally {
+      setIsCreatingSprint(false);
+    }
+  };
+
+  const toggleSprintTask = (taskId: string) => {
+    setSelectedSprintTasks((prev) => {
+      const next = new Set(prev);
+      next.has(taskId) ? next.delete(taskId) : next.add(taskId);
+      return next;
+    });
+  };
+
+  const handleMeetingNotes = async () => {
+    if (!meetingNotesText.trim() || isLoading) return;
+    const notes = meetingNotesText.trim();
+    setMeetingNotesOpen(false);
+    setMeetingNotesText("");
+    const prompt = `Extract all decisions, action items, and tasks from these meeting notes and propose them as Kanban tasks:\n\n${notes}`;
+    await handleQuickAction(prompt);
+  };
+
   const handleClear = () => {
     AIService.clearChatContext(contextId);
     setMessages(getInitialMessages());
@@ -559,6 +652,17 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
             />
           )}
 
+          {sprintProposal && (
+            <SprintProposalCard
+              proposal={sprintProposal}
+              selectedTasks={selectedSprintTasks}
+              isCreating={isCreatingSprint}
+              onToggle={toggleSprintTask}
+              onCreate={handleCreateSprint}
+              onDismiss={() => { setSprintProposal(null); setSelectedSprintTasks(new Set()); }}
+            />
+          )}
+
           {proposedEpic && (
             <EpicProposalCard
               proposedEpic={proposedEpic}
@@ -615,8 +719,35 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
             }
           }}
           onQuickAction={handleQuickAction}
+          onPasteMeetingNotes={() => setMeetingNotesOpen(true)}
+          onGenerateSprint={handleGenerateSprint}
         />
       </Card>
+
+      <Dialog open={meetingNotesOpen} onOpenChange={setMeetingNotesOpen}>
+        <DialogContent className="sm:max-w-125">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Extract Tasks from Meeting Notes
+            </DialogTitle>
+          </DialogHeader>
+          <Textarea
+            placeholder="Paste your meeting notes here..."
+            value={meetingNotesText}
+            onChange={(e) => setMeetingNotesText(e.target.value)}
+            className="min-h-48 resize-none"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setMeetingNotesOpen(false); setMeetingNotesText(""); }}>
+              <X className="h-4 w-4 mr-1" />Cancel
+            </Button>
+            <Button onClick={handleMeetingNotes} disabled={!meetingNotesText.trim()}>
+              <Sparkles className="h-4 w-4 mr-1" />Extract Tasks
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AISidebar
         project={project}

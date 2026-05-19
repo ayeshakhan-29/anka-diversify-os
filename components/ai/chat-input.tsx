@@ -10,6 +10,8 @@ import {
   CalendarClock,
   ArrowUpDown,
   Sparkles,
+  FileText,
+  GitBranch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/types";
@@ -24,6 +26,8 @@ interface ChatInputProps {
   onStop: () => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onQuickAction: (prompt: string) => void;
+  onPasteMeetingNotes?: () => void;
+  onGenerateSprint?: (prompt: string) => void;
 }
 
 export function ChatInput({
@@ -36,6 +40,8 @@ export function ChatInput({
   onStop,
   onKeyDown,
   onQuickAction,
+  onPasteMeetingNotes,
+  onGenerateSprint,
 }: ChatInputProps) {
   return (
     <div className="border-t p-3 shrink-0">
@@ -115,6 +121,20 @@ export function ChatInput({
             className="flex items-center gap-1 px-2 py-1 rounded-md bg-blue-500/10 hover:bg-blue-500/20 text-xs text-blue-400 transition-colors disabled:opacity-50"
           >
             <Sparkles className="h-3 w-3" />Generate Epic
+          </button>
+          <button
+            onClick={onPasteMeetingNotes}
+            disabled={isLoading}
+            className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary/50 hover:bg-secondary text-xs text-muted-foreground transition-colors disabled:opacity-50"
+          >
+            <FileText className="h-3 w-3" />Meeting Notes
+          </button>
+          <button
+            onClick={() => onGenerateSprint?.(`Plan a 2-week sprint for ${project.name} based on current tasks and priorities.`)}
+            disabled={isLoading}
+            className="flex items-center gap-1 px-2 py-1 rounded-md bg-violet-500/10 hover:bg-violet-500/20 text-xs text-violet-400 transition-colors disabled:opacity-50"
+          >
+            <GitBranch className="h-3 w-3" />Plan Sprint
           </button>
         </div>
       )}

@@ -663,7 +663,12 @@ export default function ProjectDetailPage({
                                 <div className="flex items-start gap-2">
                                   <GripVertical className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-0.5 cursor-grab shrink-0" />
                                   <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-sm leading-tight">{task.title}</p>
+                                    <div className="flex items-start gap-1.5">
+                                      <p className="font-medium text-sm leading-tight flex-1">{task.title}</p>
+                                      {task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "done" && (
+                                        <span className="shrink-0 text-[10px] font-semibold bg-destructive/20 text-destructive border border-destructive/30 rounded px-1 py-0.5 leading-none mt-0.5">OVERDUE</span>
+                                      )}
+                                    </div>
                                     {task.description && (
                                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                                         {task.description}
@@ -720,15 +725,15 @@ export default function ProjectDetailPage({
                                       </span>
                                     )}
                                   </div>
-                                  {task.dueDate && (
-                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                      <Calendar className="h-3 w-3" />
-                                      {new Date(task.dueDate).toLocaleDateString("en-US", {
-                                        month: "short",
-                                        day: "numeric",
-                                      })}
-                                    </span>
-                                  )}
+                                  {task.dueDate && (() => {
+                                    const isOverdue = new Date(task.dueDate) < new Date() && task.status !== "done";
+                                    return (
+                                      <span className={`flex items-center gap-1 text-xs ${isOverdue ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+                                        <Calendar className="h-3 w-3" />
+                                        {new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
                               </CardContent>
                             </Card>

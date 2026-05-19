@@ -267,6 +267,34 @@ class AIClient {
     return res.data;
   }
 
+  async generateSprint(
+    projectId: string,
+    prompt: string,
+  ): Promise<{
+    name: string;
+    goal: string;
+    startDate: string;
+    endDate: string;
+    suggestedTasks: { taskId: string; title: string; reason: string; priority: string }[];
+  }> {
+    const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/sprints/generate`, {
+      method: "POST",
+      body: JSON.stringify({ prompt }),
+    });
+    return res.data;
+  }
+
+  async suggestSprintTasks(
+    projectId: string,
+    sprintId: string,
+    capacity = 10,
+  ): Promise<{ taskId: string; title: string; reason: string; priority: string }[]> {
+    const res = await this.request<{ suggestions: any[] }>(
+      `/projects/${projectId}/sprints/${sprintId}/suggest?capacity=${capacity}`,
+    );
+    return res.suggestions;
+  }
+
   async pushAgentChanges(projectId: string, changes: { path: string; content: string }[], commitMessage: string): Promise<{ sha: string; url: string }> {
     const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/agent/push`, {
       method: "POST",
