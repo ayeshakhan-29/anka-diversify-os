@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,11 +21,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  projects as mockProjects,
-  teamMembers as mockUsers,
-} from "@/lib/mock-data";
-import type { Task } from "@/lib/types";
+import { projectApi } from "@/lib/project-api";
+import { inviteApi, type TeamUser } from "@/lib/invite-api";
+import type { Project, Task } from "@/lib/types";
 import {
   Search,
   Filter,
@@ -78,30 +76,38 @@ const statusColumns = [
   { id: "done", label: "Done", icon: CheckCircle2, color: "text-success" },
 ];
 
-// Gather all tasks from all projects with project info
-const allTasks = mockProjects.flatMap((project) =>
-  project.tasks.map((task) => ({
-    ...task,
-    projectName: project.name,
-    projectPhase: project.phase,
-  })),
-);
+type EnrichedTask = Task & { projectName: string; projectPhase: string };
 
 export default function TeamBoardPage() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [users, setUsers] = useState<TeamUser[]>([]);
+  const [allTasks, setAllTasks] = useState<EnrichedTask[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [memberFilter, setMemberFilter] = useState<string>("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [phaseFilter, setPhaseFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
 
+  useEffect(() => {
+    projectApi.getAll().then((ps: Project[]) => {
+      setProjects(ps);
+      setAllTasks(
+        ps.flatMap((p) =>
+          (p.tasks || []).map((t: Task) => ({
+            ...t,
+            projectName: p.name,
+            projectPhase: p.phase,
+          })),
+        ),
+      );
+    }).catch(() => {});
+    inviteApi.listUsers().then(setUsers).catch(() => {});
+  }, []);
+
   const filteredTasks = allTasks.filter((task) => {
-    const matchesSearch = task.title
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    const matchesMember =
-      memberFilter === "all" || task.assignee?.id === memberFilter;
-    const matchesProject =
-      projectFilter === "all" || task.projectId === projectFilter;
+    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesMember = memberFilter === "all" || task.assignee?.id === memberFilter;
+    const matchesProject = projectFilter === "all" || task.projectId === projectFilter;
     const matchesPhase = phaseFilter === "all" || task.phase === phaseFilter;
     return matchesSearch && matchesMember && matchesProject && matchesPhase;
   });
@@ -109,15 +115,15 @@ export default function TeamBoardPage() {
   const getTasksByStatus = (status: string) =>
     filteredTasks.filter((task) => task.status === status);
 
-  // Calculate team stats
-  const teamStats = mockUsers.map((user) => {
+  const teamStats = users.map((user) => {
     const userTasks = allTasks.filter((t) => t.assignee?.id === user.id);
     return {
       ...user,
+      name: user.name || user.email,
+      avatar: "",
       totalTasks: userTasks.length,
       completedTasks: userTasks.filter((t) => t.status === "done").length,
-      inProgressTasks: userTasks.filter((t) => t.status === "in-progress")
-        .length,
+      inProgressTasks: userTasks.filter((t) => t.status === "in-progress").length,
       reviewTasks: userTasks.filter((t) => t.status === "review").length,
     };
   });
@@ -205,7 +211,7 @@ export default function TeamBoardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Team Members</p>
-                  <p className="text-2xl font-bold">{mockUsers.length}</p>
+                  <p className="text-2xl font-bold">{users.length}</p>
                 </div>
                 <div className="h-10 w-10 rounded-lg bg-chart-4/20 flex items-center justify-center">
                   <Users className="h-5 w-5 text-chart-4" />
@@ -241,7 +247,7 @@ export default function TeamBoardPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Members</SelectItem>
-                  {mockUsers.map((user) => (
+                  {users.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.name}
                     </SelectItem>
@@ -255,7 +261,7 @@ export default function TeamBoardPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Projects</SelectItem>
-                  {mockProjects.map((project) => (
+                  {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}
                     </SelectItem>
@@ -304,9 +310,7 @@ export default function TeamBoardPage() {
 
                       <div className="flex-1 p-2 space-y-2 overflow-y-auto">
                         {columnTasks.map((task) => {
-                          const assignee = mockUsers.find(
-                            (u) => u.id === task.assigneeId,
-                          );
+                          const assignee = task.assignee;
 
                           return (
                             <Card
@@ -376,9 +380,7 @@ export default function TeamBoardPage() {
             ) : (
               <div className="space-y-2">
                 {filteredTasks.map((task) => {
-                  const assignee = mockUsers.find(
-                    (u) => u.id === task.assigneeId,
-                  );
+                  const assignee = task.assignee;
                   const statusInfo = statusColumns.find(
                     (s) => s.id === task.status,
                   );
@@ -573,7 +575,7 @@ export default function TeamBoardPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {mockProjects.map((project) => {
+                  {projects.map((project) => {
                     const projectTasks = allTasks.filter(
                       (t) => t.projectId === project.id,
                     );

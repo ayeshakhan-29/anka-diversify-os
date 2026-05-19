@@ -1,4 +1,4 @@
-import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember, Sprint } from "./types";
+import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember, Sprint, ChecklistItem } from "./types";
 
 export interface AppNotification {
   id: string;
@@ -67,6 +67,7 @@ function mapTask(t: any, projectId: string): Task {
     tags: [],
     blockingIds: t.blockingIds || [],
     blockedByIds: t.blockedByIds || [],
+    commentCount: t.commentCount ?? 0,
   };
 }
 
@@ -554,5 +555,34 @@ export const projectApi = {
 
   async deleteNotification(id: string): Promise<void> {
     await fetch(`${BASE_URL}/notifications/${id}`, { method: "DELETE", headers: getHeaders() });
+  },
+
+  // ── Checklist ───────────────────────────────────────────────────────────────
+  async getChecklist(projectId: string, taskId: string): Promise<ChecklistItem[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks/${taskId}/checklist`, { headers: getHeaders() });
+    const json = await res.json();
+    return json.data as ChecklistItem[];
+  },
+
+  async addChecklistItem(projectId: string, taskId: string, text: string): Promise<ChecklistItem> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks/${taskId}/checklist`, {
+      method: "POST", headers: getHeaders(), body: JSON.stringify({ text }),
+    });
+    const json = await res.json();
+    return json.data as ChecklistItem;
+  },
+
+  async updateChecklistItem(projectId: string, taskId: string, itemId: string, data: { checked?: boolean; text?: string }): Promise<ChecklistItem> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks/${taskId}/checklist/${itemId}`, {
+      method: "PATCH", headers: getHeaders(), body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    return json.data as ChecklistItem;
+  },
+
+  async deleteChecklistItem(projectId: string, taskId: string, itemId: string): Promise<void> {
+    await fetch(`${BASE_URL}/projects/${projectId}/tasks/${taskId}/checklist/${itemId}`, {
+      method: "DELETE", headers: getHeaders(),
+    });
   },
 };

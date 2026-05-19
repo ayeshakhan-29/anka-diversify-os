@@ -69,6 +69,7 @@ import {
   UserPlus,
   GitMerge,
   Unlink,
+  MessageSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { Image } from "lucide-react";
@@ -257,6 +258,24 @@ export default function ProjectDetailPage({
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [activeTab, refreshActivities]);
 
+  // ── keyboard shortcuts ──
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (activeTab !== "kanban") return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement).isContentEditable) return;
+      if (e.key === "n" || e.key === "N") { e.preventDefault(); setIsNewTaskOpen(true); }
+      if (e.key === "b" || e.key === "B") { e.preventDefault(); setBulkMode((v) => !v); setSelectedTaskIds(new Set()); }
+      if (e.key === "Escape") { setSelectedTask(null); setBulkMode(false); setSelectedTaskIds(new Set()); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [activeTab]);
+
+  // ── checklist state ──
+  const [checklist, setChecklist] = useState<import("@/lib/types").ChecklistItem[]>([]);
+  const [checklistInput, setChecklistInput] = useState("");
+
   // ── comments state ──
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentInput, setCommentInput] = useState("");
@@ -265,6 +284,9 @@ export default function ProjectDetailPage({
   // ── kanban state ──
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   // ── new task form ──
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
@@ -277,8 +299,9 @@ export default function ProjectDetailPage({
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   useEffect(() => {
-    if (!selectedTask) return;
+    if (!selectedTask) { setChecklist([]); setComments([]); return; }
     projectApi.getComments(id, selectedTask.id).then(setComments).catch(() => {});
+    projectApi.getChecklist(id, selectedTask.id).then(setChecklist).catch(() => {});
   }, [id, selectedTask?.id]);
 
   const handleAddComment = async () => {
@@ -292,6 +315,26 @@ export default function ProjectDetailPage({
     } catch { /* silent */ } finally {
       setCommentSubmitting(false);
     }
+  };
+
+  const handleAddChecklistItem = async () => {
+    if (!checklistInput.trim() || !selectedTask) return;
+    const text = checklistInput.trim();
+    setChecklistInput("");
+    const item = await projectApi.addChecklistItem(id, selectedTask.id, text).catch(() => null);
+    if (item) setChecklist((prev) => [...prev, item]);
+  };
+
+  const handleToggleChecklistItem = async (itemId: string, checked: boolean) => {
+    setChecklist((prev) => prev.map((i) => i.id === itemId ? { ...i, checked } : i));
+    await projectApi.updateChecklistItem(id, selectedTask!.id, itemId, { checked }).catch(() => {
+      setChecklist((prev) => prev.map((i) => i.id === itemId ? { ...i, checked: !checked } : i));
+    });
+  };
+
+  const handleDeleteChecklistItem = async (itemId: string) => {
+    setChecklist((prev) => prev.filter((i) => i.id !== itemId));
+    await projectApi.deleteChecklistItem(id, selectedTask!.id, itemId).catch(() => {});
   };
 
   // ── delete task confirmation ──
@@ -412,6 +455,50 @@ export default function ProjectDetailPage({
       refreshActivities();
     } catch {
       setTasks((prev) => [...prev, task]);
+    }
+  };
+
+  const toggleBulkSelect = (taskId: string) => {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      next.has(taskId) ? next.delete(taskId) : next.add(taskId);
+      return next;
+    });
+  };
+
+  const handleBulkUpdate = async (update: Partial<Pick<Task, "status" | "priority">>) => {
+    if (selectedTaskIds.size === 0) return;
+    setBulkLoading(true);
+    const ids = Array.from(selectedTaskIds);
+    const prev = tasks.map((t) => ({ ...t }));
+    setTasks((all) => all.map((t) => ids.includes(t.id) ? { ...t, ...update } : t));
+    try {
+      await Promise.all(ids.map((taskId) => projectApi.updateTask(id, taskId, update)));
+      refreshActivities();
+    } catch {
+      setTasks(prev);
+    } finally {
+      setBulkLoading(false);
+      setSelectedTaskIds(new Set());
+      setBulkMode(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedTaskIds.size === 0) return;
+    setBulkLoading(true);
+    const ids = Array.from(selectedTaskIds);
+    const prev = tasks.map((t) => ({ ...t }));
+    setTasks((all) => all.filter((t) => !ids.includes(t.id)));
+    try {
+      await Promise.all(ids.map((taskId) => projectApi.deleteTask(id, taskId)));
+      refreshActivities();
+    } catch {
+      setTasks(prev);
+    } finally {
+      setBulkLoading(false);
+      setSelectedTaskIds(new Set());
+      setBulkMode(false);
     }
   };
 
@@ -603,22 +690,62 @@ export default function ProjectDetailPage({
             {/* ── Kanban ── */}
             <TabsContent value="kanban" className="mt-0 flex-1">
               <div className="p-4 flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                  <Select value={phaseFilter} onValueChange={setPhaseFilter}>
-                    <SelectTrigger className="w-45">
-                      <SelectValue placeholder="Filter by phase" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Phases</SelectItem>
-                      <SelectItem value="product-modeling">Product Modeling</SelectItem>
-                      <SelectItem value="development">Development</SelectItem>
-                      <SelectItem value="marketing">Marketing</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button className="gap-2" onClick={() => setIsNewTaskOpen(true)}>
-                    <Plus className="h-4 w-4" />
-                    Add Task
-                  </Button>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Select value={phaseFilter} onValueChange={setPhaseFilter}>
+                      <SelectTrigger className="w-45">
+                        <SelectValue placeholder="Filter by phase" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Phases</SelectItem>
+                        <SelectItem value="product-modeling">Product Modeling</SelectItem>
+                        <SelectItem value="development">Development</SelectItem>
+                        <SelectItem value="marketing">Marketing</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant={bulkMode ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => { setBulkMode((v) => !v); setSelectedTaskIds(new Set()); }}
+                    >
+                      {bulkMode ? "Cancel" : "Select"}
+                    </Button>
+                  </div>
+
+                  {bulkMode && selectedTaskIds.size > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{selectedTaskIds.size} selected</span>
+                      <Select onValueChange={(v) => handleBulkUpdate({ status: v as Task["status"] })} disabled={bulkLoading}>
+                        <SelectTrigger className="h-8 text-xs w-36">
+                          <SelectValue placeholder="Set status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todo">Todo</SelectItem>
+                          <SelectItem value="in-progress">In Progress</SelectItem>
+                          <SelectItem value="review">Review</SelectItem>
+                          <SelectItem value="done">Done</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select onValueChange={(v) => handleBulkUpdate({ priority: v as Task["priority"] })} disabled={bulkLoading}>
+                        <SelectTrigger className="h-8 text-xs w-36">
+                          <SelectValue placeholder="Set priority" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" variant="destructive" className="h-8 text-xs" onClick={handleBulkDelete} disabled={bulkLoading}>
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button className="gap-2" onClick={() => setIsNewTaskOpen(true)}>
+                      <Plus className="h-4 w-4" />
+                      Add Task
+                    </Button>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-4 gap-4 min-h-150">
@@ -654,14 +781,24 @@ export default function ProjectDetailPage({
                           {columnTasks.map((task) => (
                             <Card
                               key={task.id}
-                              className="cursor-pointer hover:border-primary/50 transition-all group"
-                              draggable
-                              onDragStart={() => handleDragStart(task)}
-                              onClick={() => setSelectedTask(task)}
+                              className={`cursor-pointer hover:border-primary/50 transition-all group ${bulkMode && selectedTaskIds.has(task.id) ? "border-primary bg-primary/5" : ""}`}
+                              draggable={!bulkMode}
+                              onDragStart={() => !bulkMode && handleDragStart(task)}
+                              onClick={() => bulkMode ? toggleBulkSelect(task.id) : setSelectedTask(task)}
                             >
                               <CardContent className="p-3 space-y-3">
                                 <div className="flex items-start gap-2">
-                                  <GripVertical className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-0.5 cursor-grab shrink-0" />
+                                  {bulkMode ? (
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedTaskIds.has(task.id)}
+                                      onChange={() => toggleBulkSelect(task.id)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="h-3.5 w-3.5 mt-0.5 accent-primary shrink-0"
+                                    />
+                                  ) : (
+                                    <GripVertical className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-0.5 cursor-grab shrink-0" />
+                                  )}
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-start gap-1.5">
                                       <p className="font-medium text-sm leading-tight flex-1">{task.title}</p>
@@ -722,6 +859,12 @@ export default function ProjectDetailPage({
                                       <span className="flex items-center gap-0.5 text-xs text-yellow-400" title={`Blocking ${task.blockingIds!.length} task(s)`}>
                                         <GitMerge className="h-3 w-3 rotate-180" />
                                         {task.blockingIds!.length}
+                                      </span>
+                                    )}
+                                    {(task.commentCount ?? 0) > 0 && (
+                                      <span className="flex items-center gap-0.5 text-xs text-muted-foreground" title={`${task.commentCount} comment(s)`}>
+                                        <MessageSquare className="h-3 w-3" />
+                                        {task.commentCount}
                                       </span>
                                     )}
                                   </div>
@@ -1420,6 +1563,59 @@ export default function ProjectDetailPage({
                           ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+
+                {/* Checklist */}
+                <div className="pt-4 border-t">
+                  <div className="flex items-center justify-between mb-3">
+                    <h5 className="font-medium">Checklist</h5>
+                    {checklist.length > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        {checklist.filter((i) => i.checked).length}/{checklist.length}
+                      </span>
+                    )}
+                  </div>
+                  {checklist.length > 0 && (
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-3">
+                      <div
+                        className="h-full bg-primary transition-all"
+                        style={{ width: `${Math.round((checklist.filter((i) => i.checked).length / checklist.length) * 100)}%` }}
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-1.5 mb-2">
+                    {checklist.map((item) => (
+                      <div key={item.id} className="flex items-center gap-2 group">
+                        <input
+                          type="checkbox"
+                          checked={item.checked}
+                          onChange={(e) => handleToggleChecklistItem(item.id, e.target.checked)}
+                          className="h-3.5 w-3.5 accent-primary shrink-0"
+                        />
+                        <span className={`text-sm flex-1 ${item.checked ? "line-through text-muted-foreground" : ""}`}>
+                          {item.text}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteChecklistItem(item.id)}
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Add item..."
+                      value={checklistInput}
+                      onChange={(e) => setChecklistInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddChecklistItem(); } }}
+                      className="h-8 text-xs"
+                    />
+                    <Button size="sm" variant="outline" className="h-8 shrink-0" onClick={handleAddChecklistItem} disabled={!checklistInput.trim()}>
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
 

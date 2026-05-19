@@ -41,6 +41,17 @@ export interface Task {
   tags: string[];
   blockingIds?: string[];
   blockedByIds?: string[];
+  commentCount?: number;
+}
+
+export interface ChecklistItem {
+  id: string;
+  taskId: string;
+  projectId: string;
+  text: string;
+  checked: boolean;
+  position: number;
+  createdAt: string;
 }
 
 export interface TeamMember {
