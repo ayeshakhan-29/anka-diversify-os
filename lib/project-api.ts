@@ -561,7 +561,7 @@ export const projectApi = {
   async getChecklist(projectId: string, taskId: string): Promise<ChecklistItem[]> {
     const res = await fetch(`${BASE_URL}/projects/${projectId}/tasks/${taskId}/checklist`, { headers: getHeaders() });
     const json = await res.json();
-    return json.data as ChecklistItem[];
+    return (json.data as ChecklistItem[]) ?? [];
   },
 
   async addChecklistItem(projectId: string, taskId: string, text: string): Promise<ChecklistItem> {

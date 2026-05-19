@@ -147,7 +147,7 @@ export default function ProjectDetailPage({
   const [fileToDelete, setFileToDelete] = useState<ProjectFile | null>(null);
 
   useEffect(() => {
-    projectApi.getFiles(id).then(setFiles).catch(() => {});
+    projectApi.getFiles(id).then(setFiles).catch(() => { });
   }, [id]);
 
   const handleAddFile = async () => {
@@ -204,8 +204,8 @@ export default function ProjectDetailPage({
   const [memberError, setMemberError] = useState<string | null>(null);
 
   useEffect(() => {
-    projectApi.getMembers(id).then(setMembers).catch(() => {});
-    inviteApi.listUsers().then(setAllUsers).catch(() => {});
+    projectApi.getMembers(id).then(setMembers).catch(() => { });
+    inviteApi.listUsers().then(setAllUsers).catch(() => { });
   }, [id]);
 
   const handleAddMember = async (userId: string) => {
@@ -243,7 +243,7 @@ export default function ProjectDetailPage({
   };
 
   const refreshActivities = useCallback(() => {
-    projectApi.getActivities(id).then(setActivities).catch(() => {});
+    projectApi.getActivities(id).then(setActivities).catch(() => { });
   }, [id]);
 
   useEffect(() => { refreshActivities(); }, [refreshActivities]);
@@ -300,8 +300,8 @@ export default function ProjectDetailPage({
 
   useEffect(() => {
     if (!selectedTask) { setChecklist([]); setComments([]); return; }
-    projectApi.getComments(id, selectedTask.id).then(setComments).catch(() => {});
-    projectApi.getChecklist(id, selectedTask.id).then(setChecklist).catch(() => {});
+    projectApi.getComments(id, selectedTask.id).then(setComments).catch(() => { });
+    projectApi.getChecklist(id, selectedTask.id).then((data) => setChecklist(data ?? [])).catch(() => { });
   }, [id, selectedTask?.id]);
 
   const handleAddComment = async () => {
@@ -334,7 +334,7 @@ export default function ProjectDetailPage({
 
   const handleDeleteChecklistItem = async (itemId: string) => {
     setChecklist((prev) => prev.filter((i) => i.id !== itemId));
-    await projectApi.deleteChecklistItem(id, selectedTask!.id, itemId).catch(() => {});
+    await projectApi.deleteChecklistItem(id, selectedTask!.id, itemId).catch(() => { });
   };
 
   // ── delete task confirmation ──
@@ -351,7 +351,7 @@ export default function ProjectDetailPage({
     projectApi.getChatMessages(id).then((msgs) => {
       setChatMessages(msgs);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-    }).catch(() => {});
+    }).catch(() => { });
   }, [id]);
 
   useEffect(() => {
@@ -679,9 +679,9 @@ export default function ProjectDetailPage({
                   >
                     {tab === "kanban" ? "Kanban Board"
                       : tab === "files" ? "Files & Deliverables"
-                      : tab === "code" ? "Code"
-                      : tab === "ai-assistant" ? "AI Assistant"
-                      : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        : tab === "code" ? "Code"
+                          : tab === "ai-assistant" ? "AI Assistant"
+                            : tab.charAt(0).toUpperCase() + tab.slice(1)}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -918,7 +918,7 @@ export default function ProjectDetailPage({
                           {phaseFiles.map((file) => {
                             const Icon = file.type === "image" ? Image
                               : file.type === "code" ? FileText
-                              : File;
+                                : File;
                             return (
                               <Card key={file.id} className="group hover:border-primary/50 transition-all relative">
                                 <CardContent className="p-4">
@@ -1525,7 +1525,7 @@ export default function ProjectDetailPage({
                           const blocker = tasks.find((t) => t.id === blockingId);
                           return (
                             <div key={blockingId} className="flex items-center justify-between text-xs bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 mb-1">
-                              <span className="text-red-400 truncate">{blocker?.title || blockingId}</span>
+                              <span className="text-red-700 truncate">{blocker?.title || blockingId}</span>
                               <button
                                 onClick={async () => {
                                   await projectApi.removeDependency(project.id, selectedTask.id, blockingId);
@@ -1568,8 +1568,8 @@ export default function ProjectDetailPage({
                         setTasks((prev) => prev.map((t) => t.id === selectedTask.id
                           ? { ...t, blockedByIds: [...(t.blockedByIds ?? []), blockingTaskId] }
                           : t.id === blockingTaskId
-                          ? { ...t, blockingIds: [...(t.blockingIds ?? []), selectedTask.id] }
-                          : t
+                            ? { ...t, blockingIds: [...(t.blockingIds ?? []), selectedTask.id] }
+                            : t
                         ));
                       }}
                     >

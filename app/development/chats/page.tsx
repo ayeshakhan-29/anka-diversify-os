@@ -107,7 +107,7 @@ export default function ChatsPage() {
                           : "hover:bg-secondary/50"
                       )}
                     >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/20 shrink-0">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#D9EAFD] dark:bg-primary/20 shrink-0">
                         <Users className="h-4 w-4 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -130,7 +130,7 @@ export default function ChatsPage() {
                 {/* Header */}
                 <CardHeader className="border-b shrink-0 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/20">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#D9EAFD] dark:bg-primary/20">
                       <Users className="h-4 w-4 text-primary" />
                     </div>
                     <div>

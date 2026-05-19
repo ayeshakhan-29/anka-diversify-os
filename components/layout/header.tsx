@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Search, Plus, ChevronDown } from "lucide-react";
+import { Bell, Search, Plus, ChevronDown, Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -18,6 +18,7 @@ import {
 import { NotificationsPanel } from "@/components/notifications-panel";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "next-themes";
 import { projectApi } from "@/lib/project-api";
 
 interface HeaderProps {
@@ -29,6 +30,7 @@ export function Header({ title, breadcrumb }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const { user, logout } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     projectApi.getUnreadCount().then(setUnreadCount).catch(() => {});
@@ -111,6 +113,16 @@ export function Header({ title, breadcrumb }: HeaderProps) {
             <DropdownMenuItem>New Document</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Theme toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          aria-label="Toggle theme"
+        >
+          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </Button>
 
         {/* Notifications */}
         <div className="relative">

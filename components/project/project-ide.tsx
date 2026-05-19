@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { TerminalPanel } from "./terminal-panel";
 import { BrowserPanel } from "./browser-panel";
+import { useTheme } from "next-themes";
 
 const Editor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
@@ -106,7 +107,7 @@ function TreeItem({ node, depth, selectedPath, openDirs, onToggleDir, onSelectFi
     return (
       <div>
         <button onClick={() => onToggleDir(node.path)} style={{ paddingLeft: `${8 + depth * 12}px` }}
-          className="flex items-center w-full gap-1 py-0.5 pr-2 hover:bg-white/5 text-xs rounded">
+          className="flex items-center w-full gap-1 py-0.5 pr-2 hover:bg-accent/50 text-xs rounded">
           {isOpen ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />}
           {isOpen ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-yellow-400" /> : <Folder className="h-3.5 w-3.5 shrink-0 text-yellow-400" />}
           <span className="truncate text-foreground/80">{node.name}</span>
@@ -121,7 +122,7 @@ function TreeItem({ node, depth, selectedPath, openDirs, onToggleDir, onSelectFi
 
   return (
     <button onClick={() => onSelectFile(node.path)} style={{ paddingLeft: `${8 + depth * 12}px`, paddingRight: "8px" }}
-      className={cn("flex items-center w-full gap-1.5 py-0.5 hover:bg-white/5 text-xs rounded", isSelected && "bg-primary/15 text-primary")}>
+      className={cn("flex items-center w-full gap-1.5 py-0.5 hover:bg-accent/50 text-xs rounded", isSelected && "bg-primary/15 text-primary")}>
       <FileText className={cn("h-3.5 w-3.5 shrink-0", fileColor(node.name))} />
       <span className="truncate flex-1">{node.name}</span>
       {modifiedPaths.has(node.path) && <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 shrink-0" />}
@@ -155,6 +156,7 @@ interface ProjectIDEProps {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function ProjectIDE({ project, pendingChanges, onChangesApplied }: ProjectIDEProps) {
+  const { resolvedTheme } = useTheme();
   const [snapshot, setSnapshot] = useState<{ repoName: string; fileTree: string[]; lastSyncedAt: string } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [githubUrl, setGithubUrl] = useState(project.githubUrl || "");
@@ -316,8 +318,8 @@ export function ProjectIDE({ project, pendingChanges, onChangesApplied }: Projec
   return (
     <div className="flex h-[calc(100vh-280px)] overflow-hidden rounded-lg border bg-background">
       {/* File tree */}
-      <div className="w-52 shrink-0 border-r flex flex-col bg-[#1e1e1e] overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 shrink-0">
+      <div className="w-52 shrink-0 border-r border-border flex flex-col bg-card overflow-hidden">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide truncate">
             {snapshot.repoName.split("/")[1]}
           </span>
@@ -335,7 +337,7 @@ export function ProjectIDE({ project, pendingChanges, onChangesApplied }: Projec
       </div>
 
       {/* Editor + terminal */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-[#1e1e1e] min-w-0">
+      <div className="flex-1 flex flex-col overflow-hidden bg-background min-w-0">
         {/* Agent banner */}
         {agentBanner && (
           <div className="flex items-center justify-between gap-2 px-4 py-2 bg-violet-600/20 border-b border-violet-500/30 shrink-0">
@@ -346,14 +348,14 @@ export function ProjectIDE({ project, pendingChanges, onChangesApplied }: Projec
 
         {/* File tabs */}
         {openFiles.length > 0 && (
-          <div className="flex items-center border-b border-white/10 overflow-x-auto shrink-0 bg-[#252526]">
+          <div className="flex items-center border-b border-border overflow-x-auto shrink-0 bg-muted">
             {openFiles.map((file) => {
               const isActive = file.path === activeTab;
               const modified = file.content !== file.savedContent;
               return (
                 <button key={file.path} onClick={() => setActiveTab(file.path)}
-                  className={cn("flex items-center gap-1.5 px-3 py-2 text-xs whitespace-nowrap border-r border-white/10 hover:bg-white/5 max-w-48 shrink-0 group",
-                    isActive ? "bg-[#1e1e1e] text-foreground border-t border-t-primary" : "text-muted-foreground")}>
+                  className={cn("flex items-center gap-1.5 px-3 py-2 text-xs whitespace-nowrap border-r border-border hover:bg-accent/50 max-w-48 shrink-0 group",
+                    isActive ? "bg-background text-foreground border-t border-t-primary" : "text-muted-foreground")}>
                   <FileText className={cn("h-3 w-3 shrink-0", fileColor(file.path.split("/").pop() || ""))} />
                   <span className="truncate">{file.path.split("/").pop()}</span>
                   {modified && <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 shrink-0" />}
@@ -367,13 +369,13 @@ export function ProjectIDE({ project, pendingChanges, onChangesApplied }: Projec
 
         {/* Save bar */}
         {activeFile && (
-          <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/10 bg-[#252526] shrink-0">
+          <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border bg-muted shrink-0">
             <span className="text-xs text-muted-foreground font-mono flex-1 truncate">{activeFile.path}</span>
             {isModified && (
               <>
                 <GitCommit className="h-3 w-3 text-muted-foreground shrink-0" />
                 <Input value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)}
-                  placeholder="Commit message..." className="h-6 text-xs w-60 bg-white/5 border-white/10"
+                  placeholder="Commit message..." className="h-6 text-xs w-60"
                   onKeyDown={(e) => e.key === "Enter" && handleSave()} />
                 <Button size="sm" className="h-6 text-xs px-2" onClick={handleSave} disabled={isSaving}>
                   {isSaving ? <RefreshCw className="h-3 w-3 animate-spin" /> : <><Save className="h-3 w-3 mr-1" />Save & Push</>}
@@ -404,7 +406,7 @@ export function ProjectIDE({ project, pendingChanges, onChangesApplied }: Projec
                 language={langFromPath(activeFile.path)}
                 value={activeFile.content}
                 onChange={handleEditorChange}
-                theme="vs-dark"
+                theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
                 options={{
                   fontSize: 13, lineHeight: 20,
                   minimap: { enabled: false },
@@ -429,20 +431,20 @@ export function ProjectIDE({ project, pendingChanges, onChangesApplied }: Projec
         {/* Drag handle */}
         {showBottom && (
           <div onMouseDown={onDragStart}
-            className="h-1 bg-white/10 hover:bg-primary/50 cursor-row-resize shrink-0 transition-colors" />
+            className="h-1 bg-border hover:bg-primary/50 cursor-row-resize shrink-0 transition-colors" />
         )}
 
         {/* Terminal panel */}
-        <div className="shrink-0 border-t border-white/10 overflow-hidden bg-[#0d1117]"
+        <div className="shrink-0 border-t border-border overflow-hidden bg-[#0d1117]"
           style={{ height: showBottom ? `${bottomHeight}px` : "32px" }}>
-          <div className="flex items-center border-b border-white/10 bg-[#161b22] shrink-0 h-8">
-            <span className="flex items-center gap-1.5 px-3 h-full text-xs text-foreground border-r border-white/10">
+          <div className="flex items-center border-b border-border bg-muted shrink-0 h-8">
+            <span className="flex items-center gap-1.5 px-3 h-full text-xs text-foreground border-r border-border">
               <Terminal className="h-3.5 w-3.5" />Terminal
             </span>
             <button
               onClick={() => setShowBrowser((v) => !v)}
-              className={cn("flex items-center gap-1.5 px-3 h-full text-xs border-r border-white/10 hover:bg-white/5",
-                showBrowser ? "text-foreground bg-[#0d1117]" : "text-muted-foreground")}>
+              className={cn("flex items-center gap-1.5 px-3 h-full text-xs border-r border-border hover:bg-accent/50",
+                showBrowser ? "text-foreground bg-accent" : "text-muted-foreground")}>
               <Globe className="h-3.5 w-3.5" />Browser
             </button>
             <button onClick={() => setShowBottom((v) => !v)}
@@ -459,8 +461,8 @@ export function ProjectIDE({ project, pendingChanges, onChangesApplied }: Projec
 
       {/* Browser panel — separate right panel */}
       {showBrowser && (
-        <div className="w-120 shrink-0 border-l border-white/10 flex flex-col bg-[#0d1117] overflow-hidden">
-          <div className="flex items-center justify-between px-3 h-8 border-b border-white/10 bg-[#161b22] shrink-0">
+        <div className="w-120 shrink-0 border-l border-border flex flex-col bg-card overflow-hidden">
+          <div className="flex items-center justify-between px-3 h-8 border-b border-border bg-muted shrink-0">
             <span className="flex items-center gap-1.5 text-xs text-foreground">
               <Globe className="h-3.5 w-3.5" />Browser
             </span>

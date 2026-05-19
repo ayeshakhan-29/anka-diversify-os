@@ -94,15 +94,15 @@ export function Sidebar() {
   const isSectionActive = (basePath: string) => pathname.startsWith(basePath)
 
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-border bg-sidebar">
+    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-3 border-b border-border px-6">
+      <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
           <span className="text-sm font-bold text-primary-foreground">A</span>
         </div>
         <div className="flex flex-col">
           <span className="text-sm font-semibold text-sidebar-foreground">Anka</span>
-          <span className="text-xs text-muted-foreground">Diversify OS</span>
+          <span className="text-xs text-sidebar-foreground/60">Diversify OS</span>
         </div>
       </div>
 
@@ -117,7 +117,7 @@ export function Sidebar() {
                   "flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   isSectionActive(dept.basePath)
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -132,7 +132,7 @@ export function Sidebar() {
               </button>
 
               {expandedSections.includes(dept.name) && (
-                <div className="ml-4 mt-1 space-y-1 border-l border-border pl-3">
+                <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
                   {dept.items.map((item) => (
                     <Link
                       key={item.href}
@@ -141,7 +141,7 @@ export function Sidebar() {
                         "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                         isActive(item.href)
                           ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                       )}
                     >
                       <item.icon className="h-4 w-4" />
@@ -156,18 +156,18 @@ export function Sidebar() {
       </nav>
 
       {/* Bottom Links */}
-      <div className="border-t border-border p-3">
+      <div className="border-t border-sidebar-border p-3">
         <div className="space-y-1">
           <Link
             href="/settings"
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
             <Settings className="h-4 w-4" />
             <span>Settings</span>
           </Link>
           <Link
             href="/help"
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
             <HelpCircle className="h-4 w-4" />
             <span>Help & Support</span>

@@ -97,7 +97,7 @@ export function AISidebar({
         <CardContent className="px-3 pb-3 space-y-2">
           {repoSnapshot ? (
             <div className="space-y-2">
-              <div className="flex items-center gap-1.5 text-xs text-green-500">
+              <div className="flex items-center gap-1.5 text-xs text-green-700">
                 <FolderOpen className="h-3.5 w-3.5 shrink-0" />
                 <span className="font-medium truncate">{repoSnapshot.repoName}</span>
               </div>
@@ -422,27 +422,27 @@ export function AISidebar({
         <CardContent className="px-3 pb-3 space-y-2">
           {mode === "agent"
             ? [
-                { icon: Code, label: "Edit existing files" },
-                { icon: FileText, label: "Create new files" },
-                { icon: Bug, label: "Fix bugs in code" },
-                { icon: Github, label: "Push to GitHub" },
-              ].map(({ icon: Icon, label }) => (
-                <div key={label} className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Icon className="h-3.5 w-3.5 text-violet-400" />
-                  {label}
-                </div>
-              ))
+              { icon: Code, label: "Edit existing files" },
+              { icon: FileText, label: "Create new files" },
+              { icon: Bug, label: "Fix bugs in code" },
+              { icon: Github, label: "Push to GitHub" },
+            ].map(({ icon: Icon, label }) => (
+              <div key={label} className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Icon className="h-3.5 w-3.5 text-violet-400" />
+                {label}
+              </div>
+            ))
             : [
-                { icon: Code, label: "Code help" },
-                { icon: Bug, label: "Debug issues" },
-                { icon: FileText, label: "Documentation" },
-                { icon: Lightbulb, label: "Suggestions" },
-              ].map(({ icon: Icon, label }) => (
-                <div key={label} className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Icon className="h-3.5 w-3.5 text-primary" />
-                  {label}
-                </div>
-              ))}
+              { icon: Code, label: "Code help" },
+              { icon: Bug, label: "Debug issues" },
+              { icon: FileText, label: "Documentation" },
+              { icon: Lightbulb, label: "Suggestions" },
+            ].map(({ icon: Icon, label }) => (
+              <div key={label} className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Icon className="h-3.5 w-3.5 text-primary" />
+                {label}
+              </div>
+            ))}
         </CardContent>
       </Card>
     </div>

@@ -196,7 +196,7 @@ export default function ProductModelingPage() {
                   <p className="text-sm text-muted-foreground">Total Models</p>
                   <p className="text-2xl font-bold">{productModels.length}</p>
                 </div>
-                <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                <div className="h-10 w-10 rounded-lg bg-[#D9EAFD] dark:bg-primary/20 flex items-center justify-center">
                   <Layers className="h-5 w-5 text-primary" />
                 </div>
               </div>

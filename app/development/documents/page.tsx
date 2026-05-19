@@ -63,11 +63,11 @@ const typeIcons = {
 }
 
 const typeColors = {
-  doc: "bg-primary/20 text-primary",
+  doc: "bg-[#D9EAFD] text-primary dark:bg-primary/20",
   spreadsheet: "bg-success/20 text-success",
   presentation: "bg-warning/20 text-warning",
-  design: "bg-chart-4/20 text-chart-4",
-  code: "bg-accent/20 text-accent",
+  design: "bg-[#D9EAFD] text-chart-4 dark:bg-chart-4/20",
+  code: "bg-[#D9EAFD] text-primary dark:bg-accent/20",
 }
 
 function formatDate(dateString: string) {
