@@ -1235,6 +1235,29 @@ export default function ProjectDetailPage({
               <DialogDescription>Add a new task to the project</DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-4 py-4">
+              {/* Templates */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Templates</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: "Bug Fix", title: "Fix: ", description: "Steps to reproduce:\n1. \n\nExpected behavior:\n\nActual behavior:", priority: "high" },
+                    { label: "Feature", title: "Feat: ", description: "User story:\nAs a user, I want to...\n\nAcceptance criteria:\n- [ ] ", priority: "medium" },
+                    { label: "Code Review", title: "Review PR: ", description: "PR link:\n\nFocus areas:\n- ", priority: "medium" },
+                    { label: "Research", title: "Research: ", description: "Goal:\n\nQuestions to answer:\n1. \n\nDeliverables:", priority: "low" },
+                    { label: "Documentation", title: "Docs: ", description: "What needs to be documented:\n\nAudience:", priority: "low" },
+                    { label: "Testing", title: "Test: ", description: "Scope:\n\nTest cases:\n- [ ] ", priority: "medium" },
+                  ].map((tpl) => (
+                    <button
+                      key={tpl.label}
+                      type="button"
+                      onClick={() => setNewTask((t) => ({ ...t, title: tpl.title, description: tpl.description, priority: tpl.priority }))}
+                      className="text-xs px-2.5 py-1 rounded-full border bg-secondary/50 hover:bg-secondary hover:border-primary/50 transition-colors"
+                    >
+                      {tpl.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium">Task Title</label>
                 <Input

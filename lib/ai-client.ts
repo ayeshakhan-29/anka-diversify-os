@@ -253,6 +253,14 @@ class AIClient {
     return this.request(`/projects/${projectId}/prs/${prNumber}/review`, { method: "POST" });
   }
 
+  async generatePRDescription(projectId: string, prNumber: number): Promise<{ title: string; description: string }> {
+    const res = await this.request<{ success: boolean; data: { title: string; description: string } }>(
+      `/projects/${projectId}/prs/${prNumber}/describe`,
+      { method: "POST" },
+    );
+    return res.data;
+  }
+
   // Coding Agent
   async runAgent(projectId: string, message: string, sessionId?: string): Promise<{
     explanation: string;

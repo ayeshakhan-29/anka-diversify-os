@@ -97,6 +97,8 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
   const [reviewingPR, setReviewingPR] = useState<number | null>(null);
   const [prReviews, setPrReviews] = useState<Record<number, PRReview>>({});
   const [activePrReview, setActivePrReview] = useState<number | null>(null);
+  const [prDescriptions, setPrDescriptions] = useState<Record<number, { title: string; description: string }>>({});
+  const [generatingDescription, setGeneratingDescription] = useState<number | null>(null);
 
   // Load chat history
   useEffect(() => {
@@ -386,6 +388,19 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
       setActivePrReview(prNumber);
     } finally {
       setReviewingPR(null);
+    }
+  };
+
+  const handleGeneratePRDescription = async (prNumber: number) => {
+    if (prDescriptions[prNumber]) return;
+    setGeneratingDescription(prNumber);
+    try {
+      const result = await aiClient.generatePRDescription(project.id, prNumber);
+      setPrDescriptions((prev) => ({ ...prev, [prNumber]: result }));
+    } catch {
+      // silent
+    } finally {
+      setGeneratingDescription(null);
     }
   };
 
@@ -765,6 +780,9 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
         onSync={handleSync}
         onLoadPRs={loadPullRequests}
         onReviewPR={handleReviewPR}
+        prDescriptions={prDescriptions}
+        generatingDescription={generatingDescription}
+        onGeneratePRDescription={handleGeneratePRDescription}
         onQuickAction={handleQuickAction}
         onSetInput={setInput}
       />

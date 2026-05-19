@@ -35,10 +35,13 @@ interface AISidebarProps {
   prsLoading: boolean;
   reviewingPR: number | null;
   prReviews: Record<number, PRReview>;
+  prDescriptions: Record<number, { title: string; description: string }>;
+  generatingDescription: number | null;
   onGithubUrlChange: (url: string) => void;
   onSync: () => void;
   onLoadPRs: () => void;
   onReviewPR: (prNumber: number) => void;
+  onGeneratePRDescription: (prNumber: number) => void;
   onQuickAction: (prompt: string) => void;
   onSetInput: (value: string) => void;
 }
@@ -69,10 +72,13 @@ export function AISidebar({
   prsLoading,
   reviewingPR,
   prReviews,
+  prDescriptions,
+  generatingDescription,
   onGithubUrlChange,
   onSync,
   onLoadPRs,
   onReviewPR,
+  onGeneratePRDescription,
   onQuickAction,
   onSetInput,
 }: AISidebarProps) {
@@ -201,31 +207,87 @@ export function AISidebar({
                         </span>
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full h-6 text-xs"
-                      onClick={() => onReviewPR(pr.number)}
-                      disabled={reviewingPR === pr.number}
-                    >
-                      {reviewingPR === pr.number ? (
-                        <>
-                          <RefreshCw className="h-3 w-3 mr-1 animate-spin" />Reviewing...
-                        </>
-                      ) : prReviews[pr.number] ? (
-                        <>
-                          <Check className="h-3 w-3 mr-1 text-green-400" />View Review
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-3 w-3 mr-1" />AI Review
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 h-6 text-xs"
+                        onClick={() => onReviewPR(pr.number)}
+                        disabled={reviewingPR === pr.number}
+                      >
+                        {reviewingPR === pr.number ? (
+                          <><RefreshCw className="h-3 w-3 mr-1 animate-spin" />Reviewing...</>
+                        ) : prReviews[pr.number] ? (
+                          <><Check className="h-3 w-3 mr-1 text-green-400" />View Review</>
+                        ) : (
+                          <><Sparkles className="h-3 w-3 mr-1" />AI Review</>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 h-6 text-xs"
+                        onClick={() => onGeneratePRDescription(pr.number)}
+                        disabled={generatingDescription === pr.number}
+                      >
+                        {generatingDescription === pr.number ? (
+                          <><RefreshCw className="h-3 w-3 mr-1 animate-spin" />Writing...</>
+                        ) : (
+                          <><FileText className="h-3 w-3 mr-1" />Description</>
+                        )}
+                      </Button>
+                    </div>
+                    {prDescriptions[pr.number] && (
+                      <div className="mt-1 rounded border bg-background p-2 space-y-1">
+                        <p className="text-xs font-medium truncate">{prDescriptions[pr.number].title}</p>
+                        <button
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => navigator.clipboard.writeText(
+                            `## ${prDescriptions[pr.number].title}\n\n${prDescriptions[pr.number].description}`
+                          )}
+                        >
+                          Copy markdown
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Standup Digest */}
+      {mode === "chat" && (
+        <Card>
+          <CardHeader className="pb-2 pt-3 px-3">
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+              <FileText className="h-3 w-3" />Standup Digest
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3 space-y-2">
+            <p className="text-xs text-muted-foreground">Generate a daily summary of what's done, in progress, and blocked.</p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full h-7 text-xs"
+              onClick={() => onQuickAction(
+                "Generate a standup digest: list tasks completed recently, tasks currently in progress with their assignees, any blocked tasks, and flag anything overdue. Format it as a clean daily standup report."
+              )}
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />Generate Standup
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full h-7 text-xs"
+              onClick={() => onQuickAction(
+                "Write a brief weekly progress report for this project: what was accomplished, what is in flight, what risks or blockers exist, and what is planned next week."
+              )}
+            >
+              <Sparkles className="h-3 w-3 mr-1" />Weekly Report
+            </Button>
           </CardContent>
         </Card>
       )}
