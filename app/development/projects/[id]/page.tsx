@@ -350,7 +350,6 @@ export default function ProjectDetailPage({
   const refreshChat = useCallback(() => {
     projectApi.getChatMessages(id).then((msgs) => {
       setChatMessages(msgs);
-      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     }).catch(() => { });
   }, [id]);
 
@@ -364,6 +363,13 @@ export default function ProjectDetailPage({
     return () => { if (chatPollRef.current) clearInterval(chatPollRef.current); };
   }, [activeTab, refreshChat]);
 
+  // Auto-scroll to bottom when chat messages change
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [chatMessages]);
+
   const handleSendChat = async () => {
     if (!chatInput.trim() || chatSending) return;
     const content = chatInput.trim();
@@ -372,7 +378,6 @@ export default function ProjectDetailPage({
     try {
       const msg = await projectApi.sendChatMessage(id, content);
       setChatMessages((prev) => [...prev, msg]);
-      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch { setChatInput(content); }
     finally { setChatSending(false); }
   };
@@ -964,11 +969,12 @@ export default function ProjectDetailPage({
             </TabsContent>
 
             {/* ── Chat ── */}
-            <TabsContent value="chat" className="mt-0 h-[calc(100vh-280px)]">
-              <div className="flex flex-col h-full">
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <TabsContent value="chat" className="mt-0 flex-1 min-h-0 flex flex-col">
+              <div className="flex flex-col h-full overflow-hidden gap-4 p-4">
+                <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
                   {chatMessages.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                      <MessageSquare className="h-12 w-12 mb-4 opacity-20" />
                       No messages yet. Start the conversation!
                     </div>
                   ) : (
@@ -978,16 +984,16 @@ export default function ProjectDetailPage({
                         : {};
                       const isMe = msg.userId === currentUser?.id;
                       return (
-                        <div key={msg.id} className={`flex gap-3 ${isMe ? "flex-row-reverse" : ""}`}>
-                          <Avatar className="h-8 w-8 shrink-0">
-                            <AvatarFallback className="text-xs">{msg.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
+                        <div key={msg.id} className={`flex items-start gap-3 ${isMe ? "flex-row-reverse" : ""}`}>
+                          <Avatar className="h-8 w-8 shrink-0 mt-1">
+                            <AvatarFallback className="text-xs bg-primary/10 text-primary">{msg.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
                           </Avatar>
-                          <div className={`max-w-[70%] ${isMe ? "items-end" : "items-start"} flex flex-col`}>
-                            {!isMe && <p className="text-xs text-muted-foreground mb-1">{msg.userName}</p>}
-                            <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted rounded-tl-sm"}`}>
+                          <div className={`max-w-[80%] flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+                            {!isMe && <p className="text-xs font-medium text-foreground mb-1">{msg.userName}</p>}
+                            <div className={`rounded-3xl px-4 py-3 text-sm shadow-sm break-words ${isMe ? "bg-primary text-primary-foreground" : "bg-secondary/60 border border-border/50 text-foreground"}`}>
                               {msg.content}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">
+                            <p className="text-xs text-muted-foreground mt-1.5">
                               {new Date(msg.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                             </p>
                           </div>
@@ -997,7 +1003,7 @@ export default function ProjectDetailPage({
                   )}
                   <div ref={chatEndRef} />
                 </div>
-                <div className="p-4 border-t">
+                <div className="border-t pt-4">
                   <div className="flex items-center gap-2">
                     <Input
                       placeholder="Type a message..."
@@ -1006,7 +1012,7 @@ export default function ProjectDetailPage({
                       onChange={(e) => setChatInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
                     />
-                    <Button size="icon" className="h-9 w-9" onClick={handleSendChat} disabled={chatSending || !chatInput.trim()}>
+                    <Button size="icon" className="h-9 w-9 shrink-0" onClick={handleSendChat} disabled={chatSending || !chatInput.trim()}>
                       <Send className="h-4 w-4" />
                     </Button>
                   </div>
