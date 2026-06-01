@@ -1,55 +1,106 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { AdminStats } from "@/components/admin/admin-stats";
 import { ActiveProjects } from "@/components/admin/active-projects";
 import { UserInvitation } from "@/components/admin/user-invitation";
 import { TeamOverview } from "@/components/admin/team-overview";
 import { RecentTasks } from "@/components/admin/recent-tasks";
-import {
-  Users,
-  FolderKanban,
-  CheckCircle2,
-  TrendingUp,
-} from "lucide-react";
-import { users } from "@/lib/mock-data";
+import { RecentUsers } from "@/components/admin/recent-users";
+import { Users, FolderKanban, CheckCircle2, TrendingUp } from "lucide-react";
 
-const stats = [
-  {
-    title: "Total Users",
-    value: users.length.toString(),
-    change: "+12%",
-    trend: "up" as const,
-    icon: Users,
-    color: "text-primary",
-  },
-  {
-    title: "Active Projects",
-    value: "3",
-    change: "+3",
-    trend: "up" as const,
-    icon: FolderKanban,
-    color: "text-accent",
-  },
-  {
-    title: "Completed Tasks",
-    value: "24",
-    change: "+18",
-    trend: "up" as const,
-    icon: CheckCircle2,
-    color: "text-success",
-  },
-  {
-    title: "Team Productivity",
-    value: "94%",
-    change: "+5%",
-    trend: "up" as const,
-    icon: TrendingUp,
-    color: "text-warning",
-  },
-];
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+
+function getHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return { "Content-Type": "application/json" };
+  const token = localStorage.getItem("authToken");
+  const userStr = localStorage.getItem("user");
+  const user = userStr ? JSON.parse(userStr) : null;
+  return {
+    "Content-Type": "application/json",
+    "X-User-ID": user?.id || "demo-user-id",
+    "X-User-Name": user?.name || "Demo User",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+interface DashboardStats {
+  totalUsers: number;
+  activeProjects: number;
+  completedTasks: number;
+  projects: {
+    id: string;
+    name: string;
+    phase: string | null;
+    status: string;
+    progress: number | null;
+    githubUrl: string | null;
+    memberCount: number;
+  }[];
+  recentTasks: {
+    id: string;
+    title: string;
+    status: string;
+    priority: string;
+    dueDate: string | null;
+    projectId: string;
+    projectName: string | null;
+  }[];
+  users: {
+    id: string;
+    name: string | null;
+    email: string;
+    role: string;
+    status: string;
+  }[];
+}
 
 export default function AdminPage() {
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+
+  useEffect(() => {
+    fetch(`${BASE_URL}/admin/stats`, { headers: getHeaders() })
+      .then((r) => r.json())
+      .then((json) => setStats(json.data))
+      .catch(console.error);
+  }, []);
+
+  const statCards = [
+    {
+      title: "Total Users",
+      value: stats ? stats.totalUsers.toString() : "—",
+      change: "",
+      trend: "up" as const,
+      icon: Users,
+      color: "text-primary",
+    },
+    {
+      title: "Active Projects",
+      value: stats ? stats.activeProjects.toString() : "—",
+      change: "",
+      trend: "up" as const,
+      icon: FolderKanban,
+      color: "text-accent",
+    },
+    {
+      title: "Completed Tasks",
+      value: stats ? stats.completedTasks.toString() : "—",
+      change: "",
+      trend: "up" as const,
+      icon: CheckCircle2,
+      color: "text-success",
+    },
+    {
+      title: "Team Members",
+      value: stats ? stats.users.length.toString() : "—",
+      change: "",
+      trend: "up" as const,
+      icon: TrendingUp,
+      color: "text-warning",
+    },
+  ];
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -60,25 +111,18 @@ export default function AdminPage() {
           </p>
         </div>
 
-        {/* Stats Overview */}
-        <AdminStats stats={stats} />
+        <AdminStats stats={statCards} />
 
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Active Projects */}
-          <ActiveProjects />
+          <ActiveProjects projects={stats?.projects ?? []} />
 
-          {/* Right Column */}
           <div className="space-y-6">
-            {/* User Invitation */}
-            <UserInvitation />
-
-            {/* Team Overview */}
-            <TeamOverview />
+            <UserInvitation recentUsers={stats?.users ?? []} />
+            <TeamOverview users={stats?.users ?? []} />
           </div>
         </div>
 
-        {/* Recent Tasks */}
-        <RecentTasks />
+        <RecentTasks tasks={stats?.recentTasks ?? []} />
       </div>
     </MainLayout>
   );
