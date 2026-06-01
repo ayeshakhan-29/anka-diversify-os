@@ -539,7 +539,7 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex gap-4 p-4 h-[calc(100vh-320px)]">
+    <div className="flex gap-4 p-4 h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] overflow-hidden">
       {/* Main chat panel */}
       <Card className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
