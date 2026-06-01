@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -44,6 +44,8 @@ import {
   Edit,
   Trash2,
   Copy,
+  Play,
+  Zap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -63,6 +65,7 @@ function getHeaders(): Record<string, string> {
 }
 
 type Category = "security" | "workflow" | "access" | "notification"
+type RuleType = "sprint_auto_close" | "overdue_escalation" | null
 
 interface Rule {
   id: string
@@ -74,6 +77,7 @@ interface Rule {
   actions: string[]
   createdBy: string
   createdAt: string
+  ruleType: RuleType
 }
 
 const categoryIcons = {
@@ -90,6 +94,11 @@ const categoryColors = {
   notification: "bg-accent/20 text-accent",
 }
 
+const ruleTypeLabels: Record<string, string> = {
+  sprint_auto_close: "Sprint Auto-Close",
+  overdue_escalation: "Overdue Escalation",
+}
+
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("en-US", {
     year: "numeric",
@@ -99,10 +108,7 @@ function formatDate(dateString: string) {
 }
 
 function splitLines(value: string): string[] {
-  return value
-    .split(/[\n,]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
+  return value.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
 }
 
 interface RuleCardProps {
@@ -111,9 +117,10 @@ interface RuleCardProps {
   onEdit: (rule: Rule) => void
   onDuplicate: (id: string) => void
   onDelete: (id: string) => void
+  onRun: (id: string) => void
 }
 
-function RuleCard({ rule, onToggle, onEdit, onDuplicate, onDelete }: RuleCardProps) {
+function RuleCard({ rule, onToggle, onEdit, onDuplicate, onDelete, onRun }: RuleCardProps) {
   const Icon = categoryIcons[rule.category]
 
   return (
@@ -125,9 +132,15 @@ function RuleCard({ rule, onToggle, onEdit, onDuplicate, onDelete }: RuleCardPro
               <Icon className="h-5 w-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <h3 className="font-medium text-foreground">{rule.name}</h3>
                 <Badge variant="outline" className="text-xs capitalize">{rule.category}</Badge>
+                {rule.ruleType && (
+                  <Badge className="text-xs gap-1 bg-success/20 text-success border-success/30">
+                    <Zap className="h-3 w-3" />
+                    {ruleTypeLabels[rule.ruleType]}
+                  </Badge>
+                )}
               </div>
               <p className="text-sm text-muted-foreground mb-3">{rule.description}</p>
               <div className="space-y-2">
@@ -166,17 +179,19 @@ function RuleCard({ rule, onToggle, onEdit, onDuplicate, onDelete }: RuleCardPro
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => onEdit(rule)}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit Rule
+                  <Edit className="h-4 w-4 mr-2" />Edit Rule
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onDuplicate(rule.id)}>
-                  <Copy className="h-4 w-4 mr-2" />
-                  Duplicate
+                  <Copy className="h-4 w-4 mr-2" />Duplicate
                 </DropdownMenuItem>
+                {rule.ruleType && (
+                  <DropdownMenuItem onClick={() => onRun(rule.id)}>
+                    <Play className="h-4 w-4 mr-2" />Run Now
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive" onClick={() => onDelete(rule.id)}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Rule
+                  <Trash2 className="h-4 w-4 mr-2" />Delete Rule
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -187,22 +202,29 @@ function RuleCard({ rule, onToggle, onEdit, onDuplicate, onDelete }: RuleCardPro
   )
 }
 
-const emptyForm = { name: "", description: "", category: "workflow" as Category, conditions: "", actions: "" }
+const emptyForm = {
+  name: "",
+  description: "",
+  category: "workflow" as Category,
+  conditions: "",
+  actions: "",
+  ruleType: "" as string,
+}
 
 export default function RulesPage() {
   const [rules, setRules] = useState<Rule[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
 
-  // Create / edit dialog
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingRule, setEditingRule] = useState<Rule | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
 
-  // Delete confirm
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  const [runResult, setRunResult] = useState<{ label: string; result: string } | null>(null)
 
   useEffect(() => {
     fetch(`${BASE_URL}/admin/rules`, { headers: getHeaders() })
@@ -225,6 +247,7 @@ export default function RulesPage() {
       category: rule.category,
       conditions: rule.conditions.join("\n"),
       actions: rule.actions.join("\n"),
+      ruleType: rule.ruleType ?? "",
     })
     setDialogOpen(true)
   }
@@ -239,6 +262,7 @@ export default function RulesPage() {
         category: form.category,
         conditions: splitLines(form.conditions),
         actions: splitLines(form.actions),
+        ruleType: form.ruleType || null,
       }
       if (editingRule) {
         const res = await fetch(`${BASE_URL}/admin/rules/${editingRule.id}`, {
@@ -293,6 +317,18 @@ export default function RulesPage() {
     setRules((prev) => prev.filter((r) => r.id !== deleteId))
     setDeleteId(null)
     setDeleting(false)
+  }
+
+  const handleRun = async (id: string) => {
+    const rule = rules.find((r) => r.id === id)
+    const res = await fetch(`${BASE_URL}/admin/rules/${id}/run`, {
+      method: "POST",
+      headers: getHeaders(),
+    })
+    const json = await res.json()
+    const label = rule?.ruleType ? ruleTypeLabels[rule.ruleType] : "Rule"
+    const resultText = JSON.stringify(json.data ?? json.message, null, 2)
+    setRunResult({ label, result: resultText })
   }
 
   const filtered = rules.filter((rule) => {
@@ -356,12 +392,10 @@ export default function RulesPage() {
               <p className="text-sm text-muted-foreground">Manage workflow automation and business rules</p>
             </div>
             <Button onClick={openCreate}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Rule
+              <Plus className="h-4 w-4 mr-2" />Create Rule
             </Button>
           </div>
 
-          {/* Filters */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -387,7 +421,6 @@ export default function RulesPage() {
             </Select>
           </div>
 
-          {/* Rules Grid */}
           <div className="grid gap-4">
             {filtered.map((rule) => (
               <RuleCard
@@ -397,6 +430,7 @@ export default function RulesPage() {
                 onEdit={openEdit}
                 onDuplicate={handleDuplicate}
                 onDelete={(id) => setDeleteId(id)}
+                onRun={handleRun}
               />
             ))}
             {filtered.length === 0 && (
@@ -435,20 +469,39 @@ export default function RulesPage() {
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v as Category }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="security">Security</SelectItem>
-                  <SelectItem value="workflow">Workflow</SelectItem>
-                  <SelectItem value="access">Access Control</SelectItem>
-                  <SelectItem value="notification">Notification</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v as Category }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="security">Security</SelectItem>
+                    <SelectItem value="workflow">Workflow</SelectItem>
+                    <SelectItem value="access">Access Control</SelectItem>
+                    <SelectItem value="notification">Notification</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Enforcement</Label>
+                <Select value={form.ruleType || "none"} onValueChange={(v) => setForm((f) => ({ ...f, ruleType: v === "none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Policy only</SelectItem>
+                    <SelectItem value="sprint_auto_close">Sprint Auto-Close</SelectItem>
+                    <SelectItem value="overdue_escalation">Overdue Escalation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            {form.ruleType && (
+              <div className="rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-sm text-muted-foreground">
+                <span className="font-medium text-success">Enforced rule — </span>
+                {form.ruleType === "sprint_auto_close" && "When a task is marked done, the system checks if all tasks in its sprint are complete and closes the sprint automatically."}
+                {form.ruleType === "overdue_escalation" && "Scans all tasks with a passed due date and sends in-app notifications to every project member. Deduped to once per 24h per task."}
+                {" "}When this rule is enabled, it also runs retroactively on existing data.
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Conditions <span className="text-xs text-muted-foreground">(one per line)</span></Label>
               <Textarea
@@ -482,15 +535,32 @@ export default function RulesPage() {
         <DialogContent className="sm:max-w-100">
           <DialogHeader>
             <DialogTitle>Delete Rule</DialogTitle>
-            <DialogDescription>
-              This will permanently delete the rule. This action cannot be undone.
-            </DialogDescription>
+            <DialogDescription>This will permanently delete the rule. This action cannot be undone.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
               {deleting ? "Deleting…" : "Delete"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Run result dialog */}
+      <Dialog open={!!runResult} onOpenChange={(o) => { if (!o) setRunResult(null) }}>
+        <DialogContent className="sm:max-w-125">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Play className="h-4 w-4 text-success" />
+              {runResult?.label} — Run Result
+            </DialogTitle>
+            <DialogDescription>Rule executed against all existing data.</DialogDescription>
+          </DialogHeader>
+          <pre className="rounded-lg bg-secondary p-4 text-sm font-mono overflow-auto max-h-48">
+            {runResult?.result}
+          </pre>
+          <DialogFooter>
+            <Button onClick={() => setRunResult(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
