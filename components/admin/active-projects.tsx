@@ -40,40 +40,40 @@ export function ActiveProjects({ projects }: ActiveProjectsProps) {
       <CardContent>
         <div className="space-y-4">
           {projects.map((project) => (
-            <div
-              key={project.id}
-              className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
-                  <FolderKanban className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h4 className="font-medium text-foreground">{project.name}</h4>
-                  <div className="flex items-center gap-2 mt-1">
-                    {project.phase && (
-                      <Badge className={phaseColors[project.phase] ?? "bg-gray-100 text-gray-800"}>
-                        {project.phase}
-                      </Badge>
-                    )}
-                    <span className="text-sm text-muted-foreground">
-                      {project.memberCount} members
-                    </span>
-                    {project.githubUrl && (
-                      <Badge variant="outline" className="text-xs">
-                        <Github className="h-3 w-3 mr-1" />
-                        Connected
-                      </Badge>
-                    )}
+              <div
+                key={project.id}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 shrink-0">
+                    <FolderKanban className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-medium text-foreground truncate">{project.name}</h4>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {project.phase && (
+                        <Badge className={phaseColors[project.phase] ?? "bg-gray-100 text-gray-800"}>
+                          {project.phase}
+                        </Badge>
+                      )}
+                      <span className="text-sm text-muted-foreground whitespace-nowrap">
+                        {project.memberCount} members
+                      </span>
+                      {project.githubUrl && (
+                        <Badge variant="outline" className="text-xs">
+                          <Github className="h-3 w-3 mr-1" />
+                          Connected
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
+                <div className="text-left sm:text-right shrink-0">
+                  <div className="text-sm text-muted-foreground mb-1">Progress</div>
+                  <Progress value={project.progress ?? 0} className="w-full sm:w-20 mb-2" />
+                  <div className="text-sm font-medium">{project.progress ?? 0}%</div>
+                </div>
               </div>
-              <div className="text-right">
-                <div className="text-sm text-muted-foreground mb-1">Progress</div>
-                <Progress value={project.progress ?? 0} className="w-20 mb-2" />
-                <div className="text-sm font-medium">{project.progress ?? 0}%</div>
-              </div>
-            </div>
           ))}
           {projects.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-6">No active projects</p>

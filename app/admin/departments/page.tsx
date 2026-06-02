@@ -105,7 +105,7 @@ export default function DepartmentsPage() {
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
           <div>
             <h2 className="text-lg font-semibold text-foreground">Departments Overview</h2>
             <p className="text-sm text-muted-foreground">

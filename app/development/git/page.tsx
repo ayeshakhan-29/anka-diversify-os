@@ -179,20 +179,20 @@ export default function GitPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="commits" className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <TabsList className="bg-secondary">
               <TabsTrigger value="commits">Commits</TabsTrigger>
               <TabsTrigger value="branches">Branches</TabsTrigger>
               <TabsTrigger value="pull-requests">Pull Requests</TabsTrigger>
             </TabsList>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Sync
+                <span className="sm:inline">Sync</span>
               </Button>
-              <Button size="sm">
+              <Button size="sm" className="flex-1 sm:flex-none">
                 <Plus className="h-4 w-4 mr-2" />
-                New Branch
+                <span className="sm:inline">New Branch</span>
               </Button>
             </div>
           </div>

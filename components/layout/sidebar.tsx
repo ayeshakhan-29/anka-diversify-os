@@ -3,6 +3,8 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
@@ -26,6 +28,7 @@ import {
   UsersRound,
   Lightbulb,
   Map,
+  Menu,
 } from "lucide-react"
 
 interface NavItem {
@@ -93,8 +96,8 @@ export function Sidebar() {
   const isActive = (href: string) => pathname === href
   const isSectionActive = (basePath: string) => pathname.startsWith(basePath)
 
-  return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar">
+  const navContent = (
+    <>
       {/* Logo */}
       <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
@@ -174,6 +177,32 @@ export function Sidebar() {
           </Link>
         </div>
       </div>
-    </aside>
+    </>
+  )
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
+        {navContent}
+      </aside>
+
+      {/* Mobile hamburger */}
+      <Sheet>
+        <SheetTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="fixed left-4 top-3.5 z-50 flex h-9 w-9 lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left" className="w-64 p-0 bg-sidebar border-sidebar-border">
+          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+          {navContent}
+        </SheetContent>
+      </Sheet>
+    </>
   )
 }

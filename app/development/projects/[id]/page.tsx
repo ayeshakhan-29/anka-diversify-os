@@ -587,31 +587,31 @@ export default function ProjectDetailPage({
 
         {/* ── Header ── */}
         <div className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-          <div className="p-4">
-            <div className="flex items-center gap-4 mb-4">
+            <div className="p-3 sm:p-4">
+            <div className="flex items-start sm:items-center gap-3 sm:gap-4 mb-4">
               <Link href="/development/projects">
-                <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
               </Link>
-              <div className="flex-1">
-                <div className="flex items-center gap-3">
-                  <h1 className="text-xl font-bold">{project.name}</h1>
-                  <Badge variant="outline" className={phaseColors[project.phase]}>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                  <h1 className="text-lg sm:text-xl font-bold truncate">{project.name}</h1>
+                  <Badge variant="outline" className={phaseColors[project.phase] + " shrink-0"}>
                     {phaseLabels[project.phase]}
                   </Badge>
                 </div>
-                <p className="text-sm text-muted-foreground mt-0.5">{project.description}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">{project.description}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-2"
+                  className="gap-1 sm:gap-2 px-2 sm:px-3"
                   onClick={() => setIsEditOpen(true)}
                 >
                   <Settings className="h-4 w-4" />
-                  Settings
+                  <span className="hidden sm:inline">Settings</span>
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -642,50 +642,50 @@ export default function ProjectDetailPage({
             </div>
 
             {/* Stats bar */}
-            <div className="flex items-center gap-6">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
               {members.length > 0 && (
                 <>
                   <div className="flex items-center gap-2">
                     <div className="flex items-center -space-x-2">
                       {members.slice(0, 4).map((member) => (
-                        <Avatar key={member.id} className="h-7 w-7 border-2 border-background">
-                          <AvatarFallback className="text-xs">{(member.name || member.email).slice(0, 2).toUpperCase()}</AvatarFallback>
+                        <Avatar key={member.id} className="h-6 w-6 sm:h-7 sm:w-7 border-2 border-background">
+                          <AvatarFallback className="text-[10px] sm:text-xs">{(member.name || member.email).slice(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
                       ))}
                     </div>
-                    <span className="text-sm text-muted-foreground">{members.length} member{members.length !== 1 ? "s" : ""}</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">{members.length} member{members.length !== 1 ? "s" : ""}</span>
                   </div>
-                  <div className="h-4 w-px bg-border" />
+                  <div className="h-4 w-px bg-border hidden xs:block" />
                 </>
               )}
-              <div className="flex items-center gap-2 text-sm">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
+              <div className="flex items-center gap-2 text-xs sm:text-sm">
+                <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">Due:</span>
                 <span>{project.dueDate ? new Date(project.dueDate).toLocaleDateString() : "—"}</span>
               </div>
-              <div className="h-4 w-px bg-border" />
-              <div className="flex items-center gap-2 flex-1 max-w-xs">
-                <span className="text-sm text-muted-foreground">Progress:</span>
-                <Progress value={progress} className="h-2 flex-1" />
-                <span className="text-sm font-medium">{progress}%</span>
+              <div className="h-4 w-px bg-border hidden xs:block" />
+              <div className="flex items-center gap-2 flex-1 min-w-[120px] max-w-full sm:max-w-xs">
+                <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">Progress:</span>
+                <Progress value={progress} className="h-1.5 sm:h-2 flex-1" />
+                <span className="text-xs sm:text-sm font-medium whitespace-nowrap">{progress}%</span>
               </div>
             </div>
           </div>
 
           {/* ── Tabs ── */}
           <Tabs value={activeTab} className="w-full" onValueChange={(v) => { setActiveTab(v); if (v === "activity") refreshActivities(); }}>
-            <div className="px-4 border-t">
-              <TabsList className="h-12 bg-transparent gap-4 -mb-px">
+            <div className="px-4 border-t overflow-x-auto">
+              <TabsList className="h-12 bg-transparent gap-2 sm:gap-4 -mb-px w-max sm:w-full">
                 {["kanban", "files", "code", "chat", "activity", "ai-assistant"].map((tab) => (
                   <TabsTrigger
                     key={tab}
                     value={tab}
-                    className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent capitalize"
+                    className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent capitalize whitespace-nowrap text-xs sm:text-sm"
                   >
                     {tab === "kanban" ? "Kanban Board"
-                      : tab === "files" ? "Files & Deliverables"
+                      : tab === "files" ? "Files"
                         : tab === "code" ? "Code"
-                          : tab === "ai-assistant" ? "AI Assistant"
+                          : tab === "ai-assistant" ? "AI"
                             : tab.charAt(0).toUpperCase() + tab.slice(1)}
                   </TabsTrigger>
                 ))}
@@ -695,10 +695,10 @@ export default function ProjectDetailPage({
             {/* ── Kanban ── */}
             <TabsContent value="kanban" className="mt-0 flex-1">
               <div className="p-4 flex flex-col gap-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Select value={phaseFilter} onValueChange={setPhaseFilter}>
-                      <SelectTrigger className="w-45">
+                      <SelectTrigger className="w-40 sm:w-45 h-8 sm:h-10 text-xs sm:text-sm">
                         <SelectValue placeholder="Filter by phase" />
                       </SelectTrigger>
                       <SelectContent>
@@ -711,6 +711,7 @@ export default function ProjectDetailPage({
                     <Button
                       variant={bulkMode ? "secondary" : "outline"}
                       size="sm"
+                      className="h-8 sm:h-10 text-xs sm:text-sm"
                       onClick={() => { setBulkMode((v) => !v); setSelectedTaskIds(new Set()); }}
                     >
                       {bulkMode ? "Cancel" : "Select"}
@@ -718,11 +719,11 @@ export default function ProjectDetailPage({
                   </div>
 
                   {bulkMode && selectedTaskIds.size > 0 ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">{selectedTaskIds.size} selected</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{selectedTaskIds.size} selected</span>
                       <Select onValueChange={(v) => handleBulkUpdate({ status: v as Task["status"] })} disabled={bulkLoading}>
-                        <SelectTrigger className="h-8 text-xs w-36">
-                          <SelectValue placeholder="Set status" />
+                        <SelectTrigger className="h-8 text-xs w-32 sm:w-36">
+                          <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="todo">Todo</SelectItem>
@@ -732,8 +733,8 @@ export default function ProjectDetailPage({
                         </SelectContent>
                       </Select>
                       <Select onValueChange={(v) => handleBulkUpdate({ priority: v as Task["priority"] })} disabled={bulkLoading}>
-                        <SelectTrigger className="h-8 text-xs w-36">
-                          <SelectValue placeholder="Set priority" />
+                        <SelectTrigger className="h-8 text-xs w-32 sm:w-36">
+                          <SelectValue placeholder="Priority" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="low">Low</SelectItem>
@@ -746,14 +747,14 @@ export default function ProjectDetailPage({
                       </Button>
                     </div>
                   ) : (
-                    <Button className="gap-2" onClick={() => setIsNewTaskOpen(true)}>
+                    <Button className="gap-2 h-8 sm:h-10 text-xs sm:text-sm" onClick={() => setIsNewTaskOpen(true)}>
                       <Plus className="h-4 w-4" />
                       Add Task
                     </Button>
                   )}
                 </div>
 
-                <div className="grid grid-cols-4 gap-4 min-h-150">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 min-h-150">
                   {statusColumns.map((column) => {
                     const columnTasks = getTasksByStatus(column.id);
                     const Icon = column.icon;
@@ -897,9 +898,9 @@ export default function ProjectDetailPage({
             {/* ── Files ── */}
             <TabsContent value="files" className="mt-0">
               <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold">Files & Deliverables</h2>
-                  <Button className="gap-2" onClick={() => setIsAddFileOpen(true)}>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+                  <h2 className="text-base sm:text-lg font-semibold">Files & Deliverables</h2>
+                  <Button size="sm" className="gap-2" onClick={() => setIsAddFileOpen(true)}>
                     <Upload className="h-4 w-4" />
                     Add File
                   </Button>
@@ -919,7 +920,7 @@ export default function ProjectDetailPage({
                           <Badge variant="outline" className={phaseColors[phase]}>{phaseLabels[phase]}</Badge>
                           <span className="text-sm text-muted-foreground">Phase Deliverables</span>
                         </div>
-                        <div className="grid grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                           {phaseFiles.map((file) => {
                             const Icon = file.type === "image" ? Image
                               : file.type === "code" ? FileText
@@ -935,9 +936,19 @@ export default function ProjectDetailPage({
                                   </button>
                                   <div className="aspect-video bg-muted rounded-lg flex items-center justify-center mb-3">
                                     {file.url ? (
-                                      <a href={file.url} target="_blank" rel="noreferrer" className="flex items-center justify-center w-full h-full">
+                                      <button
+                                        onClick={async () => {
+                                          try {
+                                            const url = await projectApi.getFileDownloadUrl(file.projectId || project.id, file.id);
+                                            window.open(url, "_blank");
+                                          } catch {
+                                            try { window.open(file.url, "_blank"); } catch {}
+                                          }
+                                        }}
+                                        className="flex items-center justify-center w-full h-full cursor-pointer"
+                                      >
                                         <Icon className="h-8 w-8 text-muted-foreground" />
-                                      </a>
+                                      </button>
                                     ) : (
                                       <Icon className="h-8 w-8 text-muted-foreground" />
                                     )}
@@ -1453,7 +1464,7 @@ export default function ProjectDetailPage({
 
         {/* ── Task Detail Sidebar ── */}
         {selectedTask && (
-          <div className="fixed inset-y-0 right-0 w-100 bg-card border-l shadow-xl z-50">
+          <div className="fixed inset-x-0 sm:inset-x-auto sm:inset-y-0 sm:right-0 w-full sm:w-100 bg-card sm:border-l shadow-xl z-50 sm:top-0">
             <div className="flex flex-col h-full">
               <div className="p-4 border-b flex items-center justify-between">
                 <h3 className="font-semibold">Task Details</h3>

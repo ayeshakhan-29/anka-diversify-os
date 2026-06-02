@@ -75,7 +75,7 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="w-full md:w-1/2 bg-white flex flex-col items-center justify-center p-8 sm:p-12">
+    <div className="w-full md:w-1/2 bg-white flex flex-col items-center justify-center p-6 sm:p-8 lg:p-12">
       <div className="w-full max-w-md">
         <div className="flex justify-end mb-8">
           <div className="flex items-center text-lg font-semibold text-gray-800">
@@ -84,10 +84,10 @@ export default function LoginForm() {
           </div>
         </div>
 
-        <h2 className="text-4xl text-gray-900 mb-2 font-medium">
+        <h2 className="text-2xl sm:text-4xl text-gray-900 mb-2 font-medium">
           Welcome Back
         </h2>
-        <p className="text-gray-600 mb-4">
+        <p className="text-sm sm:text-base text-gray-600 mb-4">
           Enter your email and password to access your account
         </p>
 
@@ -105,7 +105,7 @@ export default function LoginForm() {
           )}
 
           <div>
-            <Label className="block text-base font-medium text-gray-700">
+            <Label className="block text-sm sm:text-base font-medium text-gray-700">
               Email
             </Label>
             <div className="relative">
@@ -124,7 +124,7 @@ export default function LoginForm() {
           </div>
 
           <div>
-            <Label className="block text-base font-medium text-gray-700">
+            <Label className="block text-sm sm:text-base font-medium text-gray-700">
               Password
             </Label>
             <div className="relative">

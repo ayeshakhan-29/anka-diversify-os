@@ -355,6 +355,15 @@ export const projectApi = {
     if (!res.ok) throw new Error(`DELETE file failed: ${res.status}`);
   },
 
+  async getFileDownloadUrl(projectId: string, fileId: string): Promise<string> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/files/${fileId}/download`, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error(`GET download URL failed: ${res.status}`);
+    const { data } = await res.json();
+    return data.downloadUrl;
+  },
+
   // ── Members ────────────────────────────────────────────────────────────────
 
   async getMembers(projectId: string): Promise<ProjectMember[]> {
@@ -584,5 +593,14 @@ export const projectApi = {
     await fetch(`${BASE_URL}/projects/${projectId}/tasks/${taskId}/checklist/${itemId}`, {
       method: "DELETE", headers: getHeaders(),
     });
+  },
+
+  // ── Global Documents ───────────────────────────────────────────────────────
+
+  async getAllDocuments(): Promise<(ProjectFile & { projectName: string })[]> {
+    const res = await fetch(`${BASE_URL}/projects/documents/all`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET all documents failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
   },
 };

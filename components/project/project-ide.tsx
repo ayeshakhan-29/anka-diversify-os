@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { TerminalPanel } from "./terminal-panel";
 import { BrowserPanel } from "./browser-panel";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/theme-provider";
 
 const Editor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,

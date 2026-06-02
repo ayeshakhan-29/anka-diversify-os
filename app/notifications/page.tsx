@@ -110,7 +110,7 @@ export default function NotificationsPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label: "All", value: notifications.length, icon: Bell, filterKey: "all" },
             { label: "Unread", value: unreadCount, icon: Circle, filterKey: "unread", accent: true },
@@ -137,7 +137,7 @@ export default function NotificationsPage() {
 
         {/* Tabs */}
         <Tabs value={filter} onValueChange={setFilter}>
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="unread">Unread</TabsTrigger>
             <TabsTrigger value="mention">Mentions</TabsTrigger>

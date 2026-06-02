@@ -93,22 +93,22 @@ export function ProjectsHeader({
   };
 
   return (
-    <div className="flex items-center justify-between mb-6">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
       <div className="flex items-center gap-4">
         <h1 className="text-2xl font-bold text-foreground">Projects</h1>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground whitespace-nowrap">
           {filteredProjectsCount}{" "}
           {filteredProjectsCount === 1 ? "project" : "projects"}
         </p>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
         {/* Add Project Button */}
         <Dialog open={isNewProjectOpen} onOpenChange={setIsNewProjectOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
-              Add Project
+              <span className="hidden sm:inline">Add Project</span>
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
@@ -238,13 +238,22 @@ export function ProjectsHeader({
         </Dialog>
 
         {/* Search and Filters */}
-        <div className="relative">
+        <div className="relative w-full sm:hidden mb-2">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search projects..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-64 bg-secondary pl-9 border-border focus:bg-background"
+            className="w-full bg-secondary pl-9 border-border focus:bg-background"
+          />
+        </div>
+        <div className="relative hidden sm:block">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search projects..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-48 lg:w-64 bg-secondary pl-9 border-border focus:bg-background"
           />
         </div>
 
@@ -252,8 +261,7 @@ export function ProjectsHeader({
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2">
               <Filter className="h-4 w-4" />
-              {phaseFilter === "all" ? "All Phases" : phaseLabels[phaseFilter]}
-              <List className="h-3 w-3" />
+              <span className="hidden sm:inline">{phaseFilter === "all" ? "All Phases" : phaseLabels[phaseFilter]}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
@@ -287,7 +295,7 @@ export function ProjectsHeader({
               ) : (
                 <Grid3X3 className="h-4 w-4" />
               )}
-              {viewMode === "grid" ? "List View" : "Grid View"}
+              <span className="hidden sm:inline">{viewMode === "grid" ? "List View" : "Grid View"}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">

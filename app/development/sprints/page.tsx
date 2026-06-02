@@ -206,7 +206,7 @@ export default function SprintsPage() {
     <MainLayout breadcrumb={["Development", "Sprints"]}>
       <div className="space-y-6">
         {/* Stats */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Card className="bg-card border-border">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -262,7 +262,7 @@ export default function SprintsPage() {
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
           <div>
             <h2 className="text-lg font-semibold text-foreground">Sprint Management</h2>
             <p className="text-sm text-muted-foreground">
@@ -407,7 +407,7 @@ export default function SprintsPage() {
                                 </p>
                               )}
 
-                              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
                                 <div className="p-3 rounded-lg bg-secondary/50">
                                   <p className="text-xs text-muted-foreground">Duration</p>
                                   <p className="text-sm font-medium text-foreground mt-1">
@@ -559,7 +559,7 @@ export default function SprintsPage() {
                                   Project: {project.name}
                                 </p>
                               )}
-                              <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
+                              <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground flex-wrap">
                                 <span>{formatDateRange(sprint.startDate, sprint.endDate)}</span>
                                 <span>Tasks: {sprint.tasks.length}</span>
                               </div>
@@ -623,7 +623,7 @@ export default function SprintsPage() {
                                   Project: {project.name}
                                 </p>
                               )}
-                              <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
+                              <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground flex-wrap">
                                 <span>{formatDateRange(sprint.startDate, sprint.endDate)}</span>
                                 <span>Velocity: {sprint.velocity} pts</span>
                                 <span>Tasks: {sprint.tasks.length}</span>

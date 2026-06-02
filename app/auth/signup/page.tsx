@@ -21,7 +21,7 @@ export default function SignUpPage() {
       className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center"
       style={{ backgroundImage: "url('/images/login-bg.jpg')" }}
     >
-      <div className="relative flex w-full max-w-6xl min-h-[600px] rounded-2xl overflow-hidden shadow-lg border-2 border-white">
+      <div className="relative flex w-full max-w-6xl min-h-[500px] sm:min-h-[600px] rounded-2xl overflow-hidden shadow-lg border-2 border-white">
         <LeftPanel type="signup" />
         
         <SignUpFormWithRole />

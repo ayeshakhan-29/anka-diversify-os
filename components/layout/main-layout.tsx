@@ -13,9 +13,9 @@ export function MainLayout({ children, title, breadcrumb }: MainLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
-      <div className="pl-64">
+      <div className="lg:pl-64">
         <Header title={title} breadcrumb={breadcrumb} />
-        <main className="p-6">{children}</main>
+        <main className="p-4 sm:p-6">{children}</main>
       </div>
     </div>
   )

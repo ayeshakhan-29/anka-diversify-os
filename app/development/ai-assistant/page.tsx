@@ -148,7 +148,7 @@ export default function AIAssistantPage() {
 
   return (
     <MainLayout breadcrumb={["Development", "AI Assistant"]}>
-      <div className="flex gap-6 h-[calc(100vh-10rem)]">
+      <div className="flex flex-col lg:flex-row gap-6 min-h-[400px] lg:h-[calc(100vh-10rem)]">
         {/* Main Chat */}
         <div className="flex-1 flex flex-col">
           <Card className="flex-1 flex flex-col bg-card border-border overflow-hidden">
@@ -309,7 +309,7 @@ export default function AIAssistantPage() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="min-h-[80px] resize-none pr-12"
+                    className="min-h-[60px] sm:min-h-[80px] resize-none pr-12"
                     disabled={isLoading}
                   />
                   <Button

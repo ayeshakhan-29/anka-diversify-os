@@ -361,7 +361,7 @@ Ready in 1.2s`,
               ref={scrollRef}
               className={cn(
                 "font-mono text-sm p-4 overflow-y-auto",
-                isFullscreen ? "h-[calc(100vh-8rem)]" : "h-[500px]"
+                  isFullscreen ? "h-[calc(100vh-8rem)]" : "h-[300px] sm:h-[500px]"
               )}
             >
               {currentTab.lines.map((line) => (

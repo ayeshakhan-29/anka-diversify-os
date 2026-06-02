@@ -18,7 +18,7 @@ import {
 import { NotificationsPanel } from "@/components/notifications-panel";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/theme-provider";
 import { projectApi } from "@/lib/project-api";
 
 interface HeaderProps {
@@ -60,18 +60,18 @@ export function Header({ title, breadcrumb }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background pl-16 pr-4 lg:px-6">
       <div className="flex items-center gap-4">
         {breadcrumb && breadcrumb.length > 0 && (
-          <nav className="flex items-center gap-2 text-sm">
+          <nav className="flex items-center gap-2 text-sm truncate">
             {breadcrumb.map((item, index) => (
               <span key={index} className="flex items-center gap-2">
-                {index > 0 && <span className="text-muted-foreground">/</span>}
+                {index > 0 && <span className="text-muted-foreground shrink-0">/</span>}
                 <span
                   className={cn(
                     index === breadcrumb.length - 1
-                      ? "text-foreground font-medium"
-                      : "text-muted-foreground",
+                      ? "text-foreground font-medium truncate"
+                      : "text-muted-foreground truncate hidden sm:inline",
                   )}
                 >
                   {item}
@@ -81,27 +81,27 @@ export function Header({ title, breadcrumb }: HeaderProps) {
           </nav>
         )}
         {title && !breadcrumb && (
-          <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-foreground truncate">{title}</h1>
         )}
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
         {/* Search */}
         <div className="relative hidden md:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search anything..."
-            className="w-64 bg-secondary pl-9 border-border focus:bg-background"
+            className="w-48 lg:w-64 bg-secondary pl-9 border-border focus:bg-background"
           />
         </div>
 
         {/* Quick Actions */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="sm" className="gap-2">
+            <Button size="sm" className="px-2 sm:px-3 gap-2">
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Create</span>
-              <ChevronDown className="h-3 w-3" />
+              <ChevronDown className="hidden sm:block h-3 w-3" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">

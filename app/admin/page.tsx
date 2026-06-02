@@ -113,7 +113,7 @@ export default function AdminPage() {
 
         <AdminStats stats={statCards} />
 
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-3">
           <ActiveProjects projects={stats?.projects ?? []} />
 
           <div className="space-y-6">

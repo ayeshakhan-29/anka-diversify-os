@@ -188,7 +188,7 @@ export default function ProductModelingPage() {
         </div>
 
         {/* Stats Overview */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -250,7 +250,7 @@ export default function ProductModelingPage() {
             <CardDescription>Track products through the modeling phases</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {modelingPhases.map(phase => {
                 const modelsInPhase = productModels.filter(m => m.phase === phase.id)
                 const Icon = phase.icon
@@ -295,8 +295,8 @@ export default function ProductModelingPage() {
 
           <TabsContent value="models" className="mt-4">
             {/* Search & Filter */}
-            <div className="flex items-center gap-4 mb-4">
-              <div className="relative flex-1 max-w-md">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
+              <div className="relative w-full sm:flex-1 sm:max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search product models..."

@@ -72,11 +72,11 @@ export default function ChatsPage() {
 
   return (
     <MainLayout breadcrumb={["Development", "Project Chats"]}>
-      <div className="flex gap-4 h-[calc(100vh-10rem)]">
+      <div className="flex flex-col lg:flex-row gap-4 min-h-[400px] lg:h-[calc(100vh-10rem)]">
 
         {/* ── Sidebar ── */}
-        <div className="w-72 shrink-0 flex flex-col">
-          <Card className="flex-1 flex flex-col overflow-hidden">
+        <div className="w-full lg:w-72 shrink-0 flex flex-col">
+          <Card className="flex-1 flex flex-col overflow-hidden max-h-64 lg:max-h-none">
             <CardHeader className="border-b shrink-0 pb-3">
               <CardTitle className="text-base">Project Chats</CardTitle>
               <div className="relative mt-2">
@@ -123,7 +123,7 @@ export default function ChatsPage() {
         </div>
 
         {/* ── Main Chat ── */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-[400px]">
           <Card className="flex-1 flex flex-col overflow-hidden">
             {activeProject ? (
               <>

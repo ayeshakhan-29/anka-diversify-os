@@ -143,7 +143,7 @@ export default function DevelopmentOverview() {
                     <Badge className="bg-success/20 text-success">Active</Badge>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {(["backlog", "todo", "in-progress", "done"] as const).map((status) => {
                       const count = activeSprint.tasks.filter((t) => t.status === status).length
                       return (

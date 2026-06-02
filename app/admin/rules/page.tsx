@@ -386,7 +386,7 @@ export default function RulesPage() {
 
         {/* Rules List */}
         <div className="space-y-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
             <div>
               <h2 className="text-lg font-semibold text-foreground">Automation Rules</h2>
               <p className="text-sm text-muted-foreground">Manage workflow automation and business rules</p>
@@ -396,7 +396,7 @@ export default function RulesPage() {
             </Button>
           </div>
 
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input

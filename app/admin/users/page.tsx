@@ -109,7 +109,7 @@ export default function UsersPage() {
   return (
     <MainLayout>
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
           <div>
             <h1 className="text-2xl font-bold">Team Members</h1>
             <p className="text-muted-foreground text-sm">Manage your team and send invitations</p>
@@ -145,13 +145,13 @@ export default function UsersPage() {
               />
             </div>
             <Card>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 {loading ? (
                   <div className="p-8 text-center text-muted-foreground text-sm">Loading...</div>
                 ) : filtered.length === 0 ? (
                   <div className="p-8 text-center text-muted-foreground text-sm">No members yet. Invite your first team member.</div>
                 ) : (
-                  <table className="w-full">
+                  <table className="w-full min-w-[600px]">
                     <thead>
                       <tr className="border-b text-xs text-muted-foreground">
                         <th className="text-left py-3 px-4 font-medium">Member</th>
@@ -224,11 +224,11 @@ export default function UsersPage() {
           {/* ── Pending invites tab ── */}
           <TabsContent value="invites" className="mt-4">
             <Card>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 {pendingInvites.length === 0 ? (
                   <div className="p-8 text-center text-muted-foreground text-sm">No pending invites.</div>
                 ) : (
-                  <table className="w-full">
+                  <table className="w-full min-w-[600px]">
                     <thead>
                       <tr className="border-b text-xs text-muted-foreground">
                         <th className="text-left py-3 px-4 font-medium">Email</th>

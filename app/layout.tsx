@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Analytics } from "@vercel/analytics/next";
+import Script from "next/script";
+import { Analytics } from "@/components/analytics";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -38,6 +39,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased" suppressHydrationWarning>
+        <Script id="theme-init" strategy="beforeInteractive">
+          {`(function(){try{var t=localStorage.getItem("theme")||"light";document.documentElement.classList.add(t)}catch(e){}})()`}
+        </Script>
         <Providers>{children}</Providers>
         <Analytics />
       </body>

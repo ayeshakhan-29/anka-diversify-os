@@ -162,7 +162,7 @@ export default function TeamBoardPage() {
         </div>
 
         {/* Team Stats */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -230,8 +230,8 @@ export default function TeamBoardPage() {
 
           <TabsContent value="board" className="mt-4">
             {/* Filters */}
-            <div className="flex items-center gap-4 mb-4 flex-wrap">
-              <div className="relative flex-1 max-w-md">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4 flex-wrap">
+              <div className="relative w-full sm:flex-1 sm:max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search tasks..."
@@ -240,8 +240,9 @@ export default function TeamBoardPage() {
                   className="pl-10"
                 />
               </div>
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
               <Select value={memberFilter} onValueChange={setMemberFilter}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full sm:w-[180px]">
                   <Users className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Filter by member" />
                 </SelectTrigger>
@@ -269,7 +270,7 @@ export default function TeamBoardPage() {
                 </SelectContent>
               </Select>
               <Select value={phaseFilter} onValueChange={setPhaseFilter}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full sm:w-[180px]">
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Filter by phase" />
                 </SelectTrigger>
@@ -282,11 +283,12 @@ export default function TeamBoardPage() {
                   <SelectItem value="marketing">Marketing</SelectItem>
                 </SelectContent>
               </Select>
+              </div>
             </div>
 
             {/* Kanban Board */}
             {viewMode === "board" ? (
-              <div className="grid grid-cols-4 gap-4 min-h-[600px]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 min-h-[600px]">
                 {statusColumns.map((column) => {
                   const columnTasks = getTasksByStatus(column.id);
                   const Icon = column.icon;
@@ -392,18 +394,18 @@ export default function TeamBoardPage() {
                       className="hover:border-primary/50 transition-all"
                     >
                       <CardContent className="p-4">
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-start sm:items-center gap-4">
                           <StatusIcon
-                            className={`h-4 w-4 ${statusInfo?.color}`}
+                            className={`h-4 w-4 mt-1 sm:mt-0 ${statusInfo?.color}`}
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-medium text-sm truncate">
                                 {task.title}
                               </p>
                               <Badge
                                 variant="outline"
-                                className={`${phaseColors[task.phase]} text-xs`}
+                                className={`${phaseColors[task.phase]} text-xs shrink-0`}
                               >
                                 {phaseLabels[task.phase]}
                               </Badge>
@@ -412,12 +414,12 @@ export default function TeamBoardPage() {
                               {task.projectName}
                             </p>
                           </div>
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-4 shrink-0">
                             <div
                               className={`h-2 w-2 rounded-full ${priorityColors[task.priority]}`}
                             />
                             {assignee && (
-                              <Avatar className="h-6 w-6">
+                              <Avatar className="h-6 w-6 hidden sm:flex">
                                 <AvatarImage src={assignee.avatar} />
                                 <AvatarFallback className="text-xs">
                                   {assignee.name.slice(0, 2)}
@@ -425,11 +427,11 @@ export default function TeamBoardPage() {
                               </Avatar>
                             )}
                             {task.dueDate && (
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-xs text-muted-foreground hidden sm:inline">
                                 {new Date(task.dueDate).toLocaleDateString()}
                               </span>
                             )}
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                           </div>
                         </div>
                       </CardContent>
@@ -513,7 +515,7 @@ export default function TeamBoardPage() {
                     );
 
                     return (
-                      <div key={member.id} className="flex items-center gap-4">
+                      <div key={member.id} className="flex items-center gap-4 flex-wrap">
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={member.avatar} />
                           <AvatarFallback>
@@ -589,19 +591,19 @@ export default function TeamBoardPage() {
 
                     return (
                       <div key={project.id} className="p-3 rounded-lg border">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm">
+                        <div className="flex items-center justify-between mb-2 gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-medium text-sm truncate">
                               {project.name}
                             </span>
                             <Badge
                               variant="outline"
-                              className={`${phaseColors[project.phase]} text-xs`}
+                              className={`${phaseColors[project.phase]} text-xs shrink-0`}
                             >
                               {phaseLabels[project.phase]}
                             </Badge>
                           </div>
-                          <span className="text-sm text-muted-foreground">
+                          <span className="text-sm text-muted-foreground shrink-0">
                             {completedTasks}/{projectTasks.length} tasks
                           </span>
                         </div>
