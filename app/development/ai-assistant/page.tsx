@@ -20,9 +20,9 @@ import {
   RotateCcw,
   Sparkles,
   MessageSquare,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { teamMembers } from "@/lib/mock-data";
 import { AIService, type ChatMessage } from "@/lib/ai-service";
 
 interface Message {
@@ -148,10 +148,10 @@ export default function AIAssistantPage() {
 
   return (
     <MainLayout breadcrumb={["Development", "AI Assistant"]}>
-      <div className="flex flex-col lg:flex-row gap-6 min-h-[400px] lg:h-[calc(100vh-10rem)]">
+      <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-6rem)]">
         {/* Main Chat */}
-        <div className="flex-1 flex flex-col">
-          <Card className="flex-1 flex flex-col bg-card border-border overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0">
+          <Card className="h-full flex flex-col bg-card border-border overflow-hidden">
             <CardHeader className="border-b border-border shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -181,7 +181,7 @@ export default function AIAssistantPage() {
             </CardHeader>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+            <div className="flex-1 overflow-y-auto p-4" ref={scrollRef}>
               <div className="space-y-6">
                 {messages.map((message) => (
                   <div
@@ -195,7 +195,7 @@ export default function AIAssistantPage() {
                       <AvatarFallback
                         className={cn(
                           message.role === "assistant"
-                            ? "bg-primary text-primary-foreground"
+                            ? "bg-gradient-to-br from-purple-500 to-blue-500 text-white"
                             : "bg-secondary text-foreground",
                         )}
                       >
@@ -283,21 +283,18 @@ export default function AIAssistantPage() {
                 {isLoading && (
                   <div className="flex gap-3">
                     <Avatar className="h-8 w-8 shrink-0">
-                      <AvatarFallback className="bg-primary text-primary-foreground">
+                      <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white">
                         <Bot className="h-4 w-4" />
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex items-center gap-2 rounded-lg bg-secondary/50 p-4">
-                      <div className="flex gap-1">
-                        <span className="h-2 w-2 rounded-full bg-primary animate-bounce" />
-                        <span className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:0.2s]" />
-                        <span className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:0.4s]" />
-                      </div>
+                    <div className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border border-purple-200/50 dark:border-purple-800/50 p-4 shadow-sm">
+                      <Loader2 className="h-4 w-4 text-purple-600 dark:text-purple-400 animate-spin" />
+                      <span className="text-sm text-muted-foreground">AI is thinking...</span>
                     </div>
                   </div>
                 )}
               </div>
-            </ScrollArea>
+            </div>
 
             {/* Input */}
             <div className="border-t border-border p-4 shrink-0">
@@ -401,39 +398,42 @@ export default function AIAssistantPage() {
           <Card className="bg-card border-border">
             <CardHeader>
               <CardTitle className="text-sm font-medium text-foreground">
-                Team Online
+                Quick Actions
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {teamMembers
-                .filter((m) => m.status === "online")
-                .slice(0, 4)
-                .map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex items-center gap-2 p-2 rounded-lg hover:bg-secondary/50 transition-colors"
-                  >
-                    <div className="relative">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-secondary text-foreground text-xs">
-                          {member.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-success border-2 border-card" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {member.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {member.role}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+              <Button
+                variant="outline"
+                className="w-full justify-start text-sm"
+                onClick={() => setInput("Help me understand the project structure")}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Project Structure
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start text-sm"
+                onClick={() => setInput("Review my recent code changes")}
+              >
+                <Code className="h-4 w-4 mr-2" />
+                Code Review
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start text-sm"
+                onClick={() => setInput("Suggest improvements for performance")}
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Optimization Tips
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start text-sm"
+                onClick={() => setInput("What are the best practices for this project?")}
+              >
+                <Lightbulb className="h-4 w-4 mr-2" />
+                Best Practices
+              </Button>
             </CardContent>
           </Card>
         </div>
