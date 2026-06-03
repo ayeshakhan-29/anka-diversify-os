@@ -23,10 +23,18 @@ import {
   Loader2,
   FolderOpen,
   ArrowRight,
+  X,
+  Image,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AIService, type AIAction } from "@/lib/ai-service";
 import { aiClient } from "@/lib/ai-client";
+import {
+  type AttachedFile,
+  ACCEPTED_FILE_TYPES,
+  readAttachedFile,
+  formatFileSize,
+} from "@/lib/attachments";
 import Link from "next/link";
 
 interface Message {
@@ -64,8 +72,19 @@ export default function AIAssistantPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [userInitials, setUserInitials] = useState("ME");
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    const results = await Promise.all(files.map(readAttachedFile));
+    const valid = results.filter(Boolean) as AttachedFile[];
+    setAttachedFiles((prev) => [...prev, ...valid]);
+    e.target.value = "";
+  };
 
   useEffect(() => {
     const userStr = localStorage.getItem("user");
@@ -110,7 +129,7 @@ export default function AIAssistantPage() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() && !attachedFiles.length || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -119,8 +138,10 @@ export default function AIAssistantPage() {
       timestamp: new Date(),
     };
 
+    const files = attachedFiles;
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    setAttachedFiles([]);
     setIsLoading(true);
 
     try {
@@ -128,6 +149,11 @@ export default function AIAssistantPage() {
         userMessage.content,
         sessionId ?? "global-chat",
         "global",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        files,
       );
 
       if (response.sessionId) setSessionId(response.sessionId);
@@ -375,6 +401,32 @@ export default function AIAssistantPage() {
 
             {/* Input */}
             <div className="border-t border-border p-4 shrink-0">
+              {/* Attached file chips */}
+              {attachedFiles.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {attachedFiles.map((f) => (
+                    <div
+                      key={f.name}
+                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary text-xs text-foreground max-w-48"
+                    >
+                      {f.kind === "image" ? (
+                        <Image className="h-3 w-3 shrink-0 text-blue-400" />
+                      ) : (
+                        <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="truncate">{f.name}</span>
+                      <span className="text-muted-foreground shrink-0">({formatFileSize(f.size)})</span>
+                      <button
+                        onClick={() => setAttachedFiles((prev) => prev.filter((x) => x.name !== f.name))}
+                        className="ml-0.5 shrink-0 hover:text-destructive transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Textarea
@@ -383,25 +435,35 @@ export default function AIAssistantPage() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="min-h-15 sm:min-h-20 resize-none pr-12"
+                    className="min-h-15 sm:min-h-20 resize-none pr-10"
                     disabled={isLoading}
                   />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute bottom-2 right-2 h-8 w-8"
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isLoading}
+                    className="absolute bottom-2 right-2 h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
                   >
                     <Paperclip className="h-4 w-4" />
-                  </Button>
+                  </button>
                 </div>
                 <Button
                   className="shrink-0"
                   onClick={handleSend}
-                  disabled={!input.trim() || isLoading}
+                  disabled={(!input.trim() && !attachedFiles.length) || isLoading}
                 >
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={ACCEPTED_FILE_TYPES}
+                className="hidden"
+                onChange={handleFileChange}
+              />
             </div>
           </Card>
         </div>

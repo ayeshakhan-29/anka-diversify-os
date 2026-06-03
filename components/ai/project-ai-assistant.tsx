@@ -9,7 +9,7 @@ import { Bot, RotateCcw, Sparkles, Zap, MessageSquare, Loader2, Check, ExternalL
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { AIService, type ProposedTask, type EpicProposal, type ProjectHealth } from "@/lib/ai-service";
+import { AIService, type ProposedTask, type EpicProposal, type ProjectHealth, type AttachedFile } from "@/lib/ai-service";
 import { projectApi } from "@/lib/project-api";
 import { aiClient, type PullRequest, type PRReview } from "@/lib/ai-client";
 import type { Project } from "@/lib/types";
@@ -49,6 +49,7 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
   const [messages, setMessages] = useState<Message[]>(getInitialMessages);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [input, setInput] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -205,9 +206,11 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
   };
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && !attachedFiles.length) || isLoading) return;
     const text = input.trim();
+    const files = attachedFiles;
     setInput("");
+    setAttachedFiles([]);
     setIsLoading(true);
     setAgentResult(null);
     setPushResult(null);
@@ -222,7 +225,7 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
       const controller = new AbortController();
       abortControllerRef.current = controller;
       try {
-        const response = await AIService.sendMessage(text, contextId, "project", project.id, project.name, undefined, controller.signal);
+        const response = await AIService.sendMessage(text, contextId, "project", project.id, project.name, undefined, controller.signal, files);
         appendAIResponse(response);
       } finally {
         setIsLoading(false);
@@ -724,6 +727,8 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
           mode={mode}
           isLoading={isLoading}
           project={project}
+          attachedFiles={attachedFiles}
+          onAttachedFilesChange={setAttachedFiles}
           onInputChange={setInput}
           onSend={handleSend}
           onStop={handleStop}

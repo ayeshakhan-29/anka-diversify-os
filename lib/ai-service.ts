@@ -1,6 +1,8 @@
 import { aiClient, type ProposedTask, type EpicProposal, type ProjectHealth, type AIAction } from "./ai-client";
+import { buildMessageWithAttachments, type AttachedFile } from "./attachments";
 
 export type { ProposedTask, EpicProposal, ProjectHealth, AIAction };
+export type { AttachedFile };
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -70,8 +72,15 @@ export class AIService {
     projectName?: string,
     mode?: "chat" | "code",
     signal?: AbortSignal,
+    attachments?: AttachedFile[],
   ): Promise<AIResponse> {
     const context = this.getChatContext(contextId, type, projectId, projectName);
+
+    // Build message content: text files are appended inline; images go via context
+    const messageText = attachments?.length
+      ? buildMessageWithAttachments(userMessage, attachments)
+      : userMessage;
+    const imageAttachments = attachments?.filter((f) => f.kind === "image") ?? [];
 
     context.messages.push({ role: "user", content: userMessage, timestamp: new Date() });
 
@@ -84,9 +93,12 @@ export class AIService {
       let actions: AIAction[] | undefined;
 
       if (type === "project" && projectId) {
+        const ctx: Record<string, unknown> = {};
+        if (mode) ctx.mode = mode;
+        if (imageAttachments.length) ctx.images = imageAttachments.map((f) => ({ name: f.name, dataUrl: f.content }));
         const res = await aiClient.sendProjectMessage(
           projectId,
-          { message: userMessage, sessionId: contextId, context: mode ? { mode } : undefined },
+          { message: messageText, sessionId: contextId, context: Object.keys(ctx).length ? ctx : undefined },
           signal,
         );
         responseText = res.message;
@@ -94,8 +106,10 @@ export class AIService {
         proposedTasks = res.proposedTasks;
         proposedEpic = res.proposedEpic;
       } else {
+        const ctx: Record<string, unknown> = {};
+        if (imageAttachments.length) ctx.images = imageAttachments.map((f) => ({ name: f.name, dataUrl: f.content }));
         const res = await aiClient.sendGeneralMessage(
-          { message: userMessage, sessionId: contextId },
+          { message: messageText, sessionId: contextId, context: Object.keys(ctx).length ? ctx : undefined },
           signal,
         );
         responseText = res.message;

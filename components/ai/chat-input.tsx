@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,15 +13,25 @@ import {
   Sparkles,
   FileText,
   GitBranch,
+  Paperclip,
+  X,
+  Image,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/types";
+import {
+  type AttachedFile,
+  ACCEPTED_FILE_TYPES,
+  readAttachedFile,
+  formatFileSize,
+} from "@/lib/attachments";
 
 interface ChatInputProps {
   input: string;
   mode: "chat" | "agent";
   isLoading: boolean;
   project: Project;
+  attachedFiles?: AttachedFile[];
   onInputChange: (value: string) => void;
   onSend: () => void;
   onStop: () => void;
@@ -28,6 +39,7 @@ interface ChatInputProps {
   onQuickAction: (prompt: string) => void;
   onPasteMeetingNotes?: () => void;
   onGenerateSprint?: (prompt: string) => void;
+  onAttachedFilesChange?: (files: AttachedFile[]) => void;
 }
 
 export function ChatInput({
@@ -35,6 +47,7 @@ export function ChatInput({
   mode,
   isLoading,
   project,
+  attachedFiles = [],
   onInputChange,
   onSend,
   onStop,
@@ -42,22 +55,74 @@ export function ChatInput({
   onQuickAction,
   onPasteMeetingNotes,
   onGenerateSprint,
+  onAttachedFilesChange,
 }: ChatInputProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    const results = await Promise.all(files.map(readAttachedFile));
+    const valid = results.filter(Boolean) as AttachedFile[];
+    onAttachedFilesChange?.([...attachedFiles, ...valid]);
+    e.target.value = "";
+  };
+
+  const removeFile = (name: string) => {
+    onAttachedFilesChange?.(attachedFiles.filter((f) => f.name !== name));
+  };
+
   return (
     <div className="border-t p-3 shrink-0">
+      {/* Attached file chips */}
+      {attachedFiles.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {attachedFiles.map((f) => (
+            <div
+              key={f.name}
+              className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary text-xs text-foreground max-w-48"
+            >
+              {f.kind === "image" ? (
+                <Image className="h-3 w-3 shrink-0 text-blue-400" />
+              ) : (
+                <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+              )}
+              <span className="truncate">{f.name}</span>
+              <span className="text-muted-foreground shrink-0">({formatFileSize(f.size)})</span>
+              <button
+                onClick={() => removeFile(f.name)}
+                className="ml-0.5 shrink-0 hover:text-destructive transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex gap-2">
-        <Textarea
-          placeholder={
-            mode === "agent"
-              ? `Tell the agent what to code in ${project.name}...`
-              : `Ask about ${project.name}...`
-          }
-          value={input}
-          onChange={(e) => onInputChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          className="min-h-15 resize-none"
-          disabled={isLoading}
-        />
+        <div className="relative flex-1">
+          <Textarea
+            placeholder={
+              mode === "agent"
+                ? `Tell the agent what to code in ${project.name}...`
+                : `Ask about ${project.name}...`
+            }
+            value={input}
+            onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            className="min-h-15 resize-none pr-10"
+            disabled={isLoading}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isLoading}
+            className="absolute bottom-2 right-2 h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+          >
+            <Paperclip className="h-4 w-4" />
+          </button>
+        </div>
         {isLoading ? (
           <Button
             variant="outline"
@@ -70,12 +135,22 @@ export function ChatInput({
           <Button
             className={cn("shrink-0", mode === "agent" && "bg-violet-600 hover:bg-violet-700")}
             onClick={onSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() && !attachedFiles.length}
           >
             {mode === "agent" ? <Zap className="h-4 w-4" /> : <Send className="h-4 w-4" />}
           </Button>
         )}
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept={ACCEPTED_FILE_TYPES}
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       {mode === "chat" && (
         <div className="flex gap-1.5 mt-2 flex-wrap">
           <button
