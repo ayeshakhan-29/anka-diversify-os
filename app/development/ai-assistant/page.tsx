@@ -25,7 +25,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AIService, type ChatMessage, type AIAction } from "@/lib/ai-service";
+import { AIService, type AIAction } from "@/lib/ai-service";
+import { aiClient } from "@/lib/ai-client";
 import Link from "next/link";
 
 interface Message {
@@ -55,14 +56,14 @@ const initialMessages: Message[] = [
   },
 ];
 
-const GLOBAL_CONTEXT_ID = "global-chat";
-
 export default function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [userInitials, setUserInitials] = useState("ME");
+  const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -75,18 +76,28 @@ export default function AIAssistantPage() {
     }
   }, []);
 
-  // Load chat history on mount
+  // Load chat history from backend on mount
   useEffect(() => {
-    const loadChatHistory = () => {
-      const history = AIService.getChatHistory(GLOBAL_CONTEXT_ID);
-      if (history.length > 0) {
-        const formattedMessages: Message[] = history.map((msg, index) => ({
-          id: index.toString(),
-          role: msg.role as "user" | "assistant",
-          content: msg.content,
-          timestamp: msg.timestamp || new Date(),
-        }));
-        setMessages(formattedMessages);
+    const loadChatHistory = async () => {
+      try {
+        const { sessions } = await aiClient.getGeneralSessions();
+        const latest = sessions[0];
+        if (!latest) return;
+        setSessionId(latest.id);
+        const { messages: msgs } = await aiClient.getGeneralSessionMessages(latest.id);
+        if (msgs.length === 0) return;
+        setMessages(
+          msgs.map((m) => ({
+            id: m.id,
+            role: m.role as "user" | "assistant",
+            content: m.content,
+            timestamp: new Date(m.createdAt),
+          })),
+        );
+      } catch {
+        // backend unreachable — keep welcome message
+      } finally {
+        setIsLoadingHistory(false);
       }
     };
     loadChatHistory();
@@ -115,9 +126,11 @@ export default function AIAssistantPage() {
     try {
       const response = await AIService.sendMessage(
         userMessage.content,
-        GLOBAL_CONTEXT_ID,
+        sessionId ?? "global-chat",
         "global",
       );
+
+      if (response.sessionId) setSessionId(response.sessionId);
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -157,7 +170,7 @@ export default function AIAssistantPage() {
   };
 
   const handleClearChat = () => {
-    AIService.clearChatContext(GLOBAL_CONTEXT_ID);
+    setSessionId(undefined);
     setMessages(initialMessages);
   };
 
