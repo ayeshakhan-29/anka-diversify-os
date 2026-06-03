@@ -84,6 +84,8 @@ export function ChatInput({
             >
               {f.kind === "image" ? (
                 <Image className="h-3 w-3 shrink-0 text-blue-400" />
+              ) : f.kind === "document" ? (
+                <FileText className="h-3 w-3 shrink-0 text-orange-400" />
               ) : (
                 <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
               )}

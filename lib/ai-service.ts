@@ -76,11 +76,10 @@ export class AIService {
   ): Promise<AIResponse> {
     const context = this.getChatContext(contextId, type, projectId, projectName);
 
-    // Build message content: text files are appended inline; images go via context
+    // Build message content: text files are appended inline; images/docs go via context
     const messageText = attachments?.length
       ? buildMessageWithAttachments(userMessage, attachments)
       : userMessage;
-    const imageAttachments = attachments?.filter((f) => f.kind === "image") ?? [];
 
     context.messages.push({ role: "user", content: userMessage, timestamp: new Date() });
 
@@ -92,10 +91,14 @@ export class AIService {
       let proposedEpic: EpicProposal | undefined;
       let actions: AIAction[] | undefined;
 
+      const imageAttachments = attachments?.filter((f) => f.kind === "image") ?? [];
+      const docAttachments   = attachments?.filter((f) => f.kind === "document") ?? [];
+
       if (type === "project" && projectId) {
         const ctx: Record<string, unknown> = {};
         if (mode) ctx.mode = mode;
-        if (imageAttachments.length) ctx.images = imageAttachments.map((f) => ({ name: f.name, dataUrl: f.content }));
+        if (imageAttachments.length) ctx.images    = imageAttachments.map((f) => ({ name: f.name, dataUrl: f.content }));
+        if (docAttachments.length)   ctx.documents = docAttachments.map((f) => ({ name: f.name, mimeType: f.mimeType, dataUrl: f.content }));
         const res = await aiClient.sendProjectMessage(
           projectId,
           { message: messageText, sessionId: contextId, context: Object.keys(ctx).length ? ctx : undefined },
@@ -107,7 +110,8 @@ export class AIService {
         proposedEpic = res.proposedEpic;
       } else {
         const ctx: Record<string, unknown> = {};
-        if (imageAttachments.length) ctx.images = imageAttachments.map((f) => ({ name: f.name, dataUrl: f.content }));
+        if (imageAttachments.length) ctx.images    = imageAttachments.map((f) => ({ name: f.name, dataUrl: f.content }));
+        if (docAttachments.length)   ctx.documents = docAttachments.map((f) => ({ name: f.name, mimeType: f.mimeType, dataUrl: f.content }));
         const res = await aiClient.sendGeneralMessage(
           { message: messageText, sessionId: contextId, context: Object.keys(ctx).length ? ctx : undefined },
           signal,
