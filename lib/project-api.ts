@@ -595,6 +595,19 @@ export const projectApi = {
     });
   },
 
+  // ── Project Documents (AI-generated) ─────────────────────────────────────
+
+  async createDocument(projectId: string, payload: { title: string; content: string; type: string }): Promise<{ id: string; title: string; projectId: string }> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/documents`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`POST document failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
   // ── Global Documents ───────────────────────────────────────────────────────
 
   async getAllDocuments(): Promise<(ProjectFile & { projectName: string })[]> {

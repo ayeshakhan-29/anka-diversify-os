@@ -25,9 +25,14 @@ import {
   ArrowRight,
   X,
   Image,
+  Save,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AIService, type AIAction } from "@/lib/ai-service";
+import { projectApi } from "@/lib/project-api";
 import { aiClient } from "@/lib/ai-client";
 import {
   type AttachedFile,
@@ -44,6 +49,125 @@ interface Message {
   timestamp: Date;
   codeBlocks?: { language: string; code: string }[];
   actions?: AIAction[];
+}
+
+function DocProposalCard({ action }: { action: AIAction }) {
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [discarded, setDiscarded] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (discarded) return null;
+
+  const { title, content, type, projectId, projectName } = action.data as {
+    title: string; content: string; type: string;
+    projectId: string; projectName: string;
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await projectApi.createDocument(projectId, { title, content, type });
+      setSaved(true);
+    } catch {
+      setError("Failed to save. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const typeBadgeColor: Record<string, string> = {
+    requirements: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+    documentation: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
+    note: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-card w-full overflow-hidden">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 p-3 border-b border-border">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10">
+            <FileText className="h-4 w-4 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground truncate">{title}</p>
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${typeBadgeColor[type] ?? "bg-secondary text-muted-foreground"}`}>
+                {type}
+              </span>
+              <span className="text-xs text-muted-foreground">→ {projectName}</span>
+            </div>
+          </div>
+        </div>
+
+        {saved ? (
+          <div className="flex items-center gap-1 shrink-0 text-xs text-green-600 dark:text-green-400 font-medium">
+            <Check className="h-3.5 w-3.5" /> Saved
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+              disabled={saving}
+              onClick={() => setDiscarded(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              Discard
+            </Button>
+            <Button
+              size="sm"
+              className="h-7 px-2.5 text-xs"
+              disabled={saving}
+              onClick={handleSave}
+            >
+              {saving ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+              ) : (
+                <Save className="h-3.5 w-3.5 mr-1" />
+              )}
+              Save to project
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Content preview */}
+      <div className="relative">
+        <div className={cn("p-3 text-xs text-muted-foreground font-mono whitespace-pre-wrap overflow-hidden transition-all", expanded ? "max-h-96 overflow-y-auto" : "max-h-24")}>
+          {content}
+        </div>
+        {!expanded && content.length > 200 && (
+          <div className="absolute bottom-0 left-0 right-0 h-8 bg-linear-to-t from-card to-transparent" />
+        )}
+      </div>
+
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border-t border-border"
+      >
+        {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        {expanded ? "Collapse" : "Preview full document"}
+      </button>
+
+      {error && <p className="px-3 pb-2 text-xs text-destructive">{error}</p>}
+
+      {saved && (
+        <div className="px-3 pb-2">
+          <Link
+            href={`/development/projects/${projectId}`}
+            className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 hover:underline"
+          >
+            View in project <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+      )}
+    </div>
+  );
 }
 
 const suggestedPrompts = [
@@ -281,48 +405,52 @@ export default function AIAssistantPage() {
 
                       {/* Action Cards */}
                       {message.actions?.map((action, i) => (
-                        <div
-                          key={i}
-                          className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 w-full"
-                        >
+                        <div key={i} className="w-full">
                           {action.type === "project_created" && (
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-500/20">
-                                  <FolderOpen className="h-4 w-4 text-green-600 dark:text-green-400" />
+                            <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-500/20">
+                                    <FolderOpen className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-medium text-green-700 dark:text-green-300">Project created</p>
+                                    <p className="text-sm font-semibold text-foreground truncate">{action.data.name as string}</p>
+                                  </div>
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="text-xs font-medium text-green-700 dark:text-green-300">Project created</p>
-                                  <p className="text-sm font-semibold text-foreground truncate">{action.data.name as string}</p>
-                                </div>
+                                <Link
+                                  href={`/development/projects/${action.data.id}`}
+                                  className="flex shrink-0 items-center gap-1 text-xs text-green-700 dark:text-green-400 hover:underline"
+                                >
+                                  Open <ArrowRight className="h-3 w-3" />
+                                </Link>
                               </div>
-                              <Link
-                                href={`/development/projects/${action.data.id}`}
-                                className="flex shrink-0 items-center gap-1 text-xs text-green-700 dark:text-green-400 hover:underline"
-                              >
-                                Open <ArrowRight className="h-3 w-3" />
-                              </Link>
                             </div>
                           )}
+                          {action.type === "document_proposed" && (
+                            <DocProposalCard action={action} />
+                          )}
                           {action.type === "document_saved" && (
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-500/20">
-                                  <FileText className="h-4 w-4 text-green-600 dark:text-green-400" />
+                            <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-500/20">
+                                    <FileText className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-medium text-green-700 dark:text-green-300">
+                                      Saved to <span className="font-semibold">{action.data.projectName as string}</span>
+                                    </p>
+                                    <p className="text-sm font-semibold text-foreground truncate">{action.data.title as string}</p>
+                                  </div>
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="text-xs font-medium text-green-700 dark:text-green-300">
-                                    Document saved to <span className="font-semibold">{action.data.projectName as string}</span>
-                                  </p>
-                                  <p className="text-sm font-semibold text-foreground truncate">{action.data.title as string}</p>
-                                </div>
+                                <Link
+                                  href={`/development/projects/${action.data.projectId}`}
+                                  className="flex shrink-0 items-center gap-1 text-xs text-green-700 dark:text-green-400 hover:underline"
+                                >
+                                  View <ArrowRight className="h-3 w-3" />
+                                </Link>
                               </div>
-                              <Link
-                                href={`/development/projects/${action.data.projectId}`}
-                                className="flex shrink-0 items-center gap-1 text-xs text-green-700 dark:text-green-400 hover:underline"
-                              >
-                                View <ArrowRight className="h-3 w-3" />
-                              </Link>
                             </div>
                           )}
                         </div>
