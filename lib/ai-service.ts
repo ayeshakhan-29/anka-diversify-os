@@ -1,6 +1,6 @@
-import { aiClient, type ProposedTask, type EpicProposal, type ProjectHealth } from "./ai-client";
+import { aiClient, type ProposedTask, type EpicProposal, type ProjectHealth, type AIAction } from "./ai-client";
 
-export type { ProposedTask, EpicProposal, ProjectHealth };
+export type { ProposedTask, EpicProposal, ProjectHealth, AIAction };
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -22,6 +22,7 @@ export interface AIResponse {
   sessionId?: string;
   proposedTasks?: ProposedTask[];
   proposedEpic?: EpicProposal;
+  actions?: AIAction[];
 }
 
 // In-memory store for within-session history (lost on page refresh — backend is source of truth)
@@ -80,6 +81,7 @@ export class AIService {
 
       let proposedTasks: ProposedTask[] | undefined;
       let proposedEpic: EpicProposal | undefined;
+      let actions: AIAction[] | undefined;
 
       if (type === "project" && projectId) {
         const res = await aiClient.sendProjectMessage(
@@ -98,12 +100,13 @@ export class AIService {
         );
         responseText = res.message;
         sessionId = res.sessionId;
+        actions = res.actions;
       }
 
       context.messages.push({ role: "assistant", content: responseText, timestamp: new Date() });
       context.lastUpdated = new Date();
 
-      return { content: responseText, sessionId, proposedTasks, proposedEpic };
+      return { content: responseText, sessionId, proposedTasks, proposedEpic, actions };
     } catch (error) {
       context.messages.pop();
       if (error instanceof Error && error.name === "AbortError") {

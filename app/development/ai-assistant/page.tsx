@@ -21,9 +21,12 @@ import {
   Sparkles,
   MessageSquare,
   Loader2,
+  FolderOpen,
+  ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AIService, type ChatMessage } from "@/lib/ai-service";
+import { AIService, type ChatMessage, type AIAction } from "@/lib/ai-service";
+import Link from "next/link";
 
 interface Message {
   id: string;
@@ -31,6 +34,7 @@ interface Message {
   content: string;
   timestamp: Date;
   codeBlocks?: { language: string; code: string }[];
+  actions?: AIAction[];
 }
 
 const suggestedPrompts = [
@@ -58,8 +62,18 @@ export default function AIAssistantPage() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [userInitials, setUserInitials] = useState("ME");
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      const name: string = user?.name || user?.email || "Me";
+      setUserInitials(name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase());
+    }
+  }, []);
 
   // Load chat history on mount
   useEffect(() => {
@@ -110,6 +124,7 @@ export default function AIAssistantPage() {
         role: "assistant",
         content: response.content,
         timestamp: new Date(),
+        actions: response.actions,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -195,14 +210,14 @@ export default function AIAssistantPage() {
                       <AvatarFallback
                         className={cn(
                           message.role === "assistant"
-                            ? "bg-gradient-to-br from-purple-500 to-blue-500 text-white"
+                            ? "bg-linear-to-br from-purple-500 to-blue-500 text-white"
                             : "bg-secondary text-foreground",
                         )}
                       >
                         {message.role === "assistant" ? (
                           <Bot className="h-4 w-4" />
                         ) : (
-                          "AC"
+                          userInitials
                         )}
                       </AvatarFallback>
                     </Avatar>
@@ -224,6 +239,55 @@ export default function AIAssistantPage() {
                           {message.content}
                         </p>
                       </div>
+
+                      {/* Action Cards */}
+                      {message.actions?.map((action, i) => (
+                        <div
+                          key={i}
+                          className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 w-full"
+                        >
+                          {action.type === "project_created" && (
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-500/20">
+                                  <FolderOpen className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium text-green-700 dark:text-green-300">Project created</p>
+                                  <p className="text-sm font-semibold text-foreground truncate">{action.data.name as string}</p>
+                                </div>
+                              </div>
+                              <Link
+                                href={`/development/projects/${action.data.id}`}
+                                className="flex shrink-0 items-center gap-1 text-xs text-green-700 dark:text-green-400 hover:underline"
+                              >
+                                Open <ArrowRight className="h-3 w-3" />
+                              </Link>
+                            </div>
+                          )}
+                          {action.type === "document_saved" && (
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-500/20">
+                                  <FileText className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium text-green-700 dark:text-green-300">
+                                    Document saved to <span className="font-semibold">{action.data.projectName as string}</span>
+                                  </p>
+                                  <p className="text-sm font-semibold text-foreground truncate">{action.data.title as string}</p>
+                                </div>
+                              </div>
+                              <Link
+                                href={`/development/projects/${action.data.projectId}`}
+                                className="flex shrink-0 items-center gap-1 text-xs text-green-700 dark:text-green-400 hover:underline"
+                              >
+                                View <ArrowRight className="h-3 w-3" />
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+                      ))}
 
                       {/* Code Blocks */}
                       {message.codeBlocks?.map((block, i) => (
@@ -283,11 +347,11 @@ export default function AIAssistantPage() {
                 {isLoading && (
                   <div className="flex gap-3">
                     <Avatar className="h-8 w-8 shrink-0">
-                      <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white">
+                      <AvatarFallback className="bg-linear-to-br from-purple-500 to-blue-500 text-white">
                         <Bot className="h-4 w-4" />
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border border-purple-200/50 dark:border-purple-800/50 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 rounded-lg bg-linear-to-br from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border border-purple-200/50 dark:border-purple-800/50 p-4 shadow-sm">
                       <Loader2 className="h-4 w-4 text-purple-600 dark:text-purple-400 animate-spin" />
                       <span className="text-sm text-muted-foreground">AI is thinking...</span>
                     </div>
@@ -306,7 +370,7 @@ export default function AIAssistantPage() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="min-h-[60px] sm:min-h-[80px] resize-none pr-12"
+                    className="min-h-15 sm:min-h-20 resize-none pr-12"
                     disabled={isLoading}
                   />
                   <Button
