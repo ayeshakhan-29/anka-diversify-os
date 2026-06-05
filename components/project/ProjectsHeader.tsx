@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Plus, Filter, Grid3X3, List } from "lucide-react";
+import { Search, Plus, Filter, Grid3X3, List, Eye, EyeOff, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { projectApi } from "@/lib/project-api";
 
 interface ProjectsHeaderProps {
   searchQuery: string;
@@ -43,6 +44,7 @@ interface ProjectsHeaderProps {
     description: string;
     phase: string;
     githubUrl: string;
+    githubToken: string;
     priority: string;
     teamLead?: string;
   }) => void;
@@ -64,12 +66,69 @@ export function ProjectsHeader({
   const [projectDescription, setProjectDescription] = useState("");
   const [startingPhase, setStartingPhase] = useState("product-modeling");
   const [githubUrl, setGithubUrl] = useState("");
+  const [githubToken, setGithubToken] = useState("");
+  const [showToken, setShowToken] = useState(false);
+  const [tokenValidation, setTokenValidation] = useState<{
+    status: 'idle' | 'validating' | 'valid' | 'invalid';
+    message?: string;
+    username?: string;
+  }>({ status: 'idle' });
   const [priority, setPriority] = useState("medium");
   const [teamLead, setTeamLead] = useState("");
 
+  const validateToken = async (token: string) => {
+    if (!token || token.length < 20) {
+      setTokenValidation({ status: 'idle' });
+      return;
+    }
+
+    setTokenValidation({ status: 'validating', message: 'Validating token...' });
+    
+    try {
+      const result = await projectApi.validateGitHubToken(token);
+      
+      console.log('Validation result:', result); // Debug log
+      
+      if (result.valid) {
+        setTokenValidation({
+          status: 'valid',
+          message: `Valid token for ${result.username}`,
+          username: result.username,
+        });
+      } else {
+        setTokenValidation({
+          status: 'invalid',
+          message: result.error || 'Invalid token',
+        });
+      }
+    } catch (error: any) {
+      console.error('Token validation error:', error);
+      setTokenValidation({
+        status: 'invalid',
+        message: error.message || 'Failed to validate token. Check backend console for details.',
+      });
+    }
+  };
+
+  const handleTokenChange = (value: string) => {
+    setGithubToken(value);
+    // Debounce validation
+    if (value.length >= 20) {
+      const timeoutId = setTimeout(() => validateToken(value), 500);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setTokenValidation({ status: 'idle' });
+    }
+  };
+
   const handleAddProject = () => {
-    if (!projectName || !githubUrl) {
-      console.error("Project name and GitHub URL are required");
+    if (!projectName || !githubUrl || !githubToken) {
+      console.error("Project name, GitHub URL, and GitHub token are required");
+      return;
+    }
+
+    if (tokenValidation.status !== 'valid') {
+      console.error("Please provide a valid GitHub token");
       return;
     }
 
@@ -78,6 +137,7 @@ export function ProjectsHeader({
       description: projectDescription,
       phase: startingPhase,
       githubUrl: githubUrl,
+      githubToken: githubToken,
       priority: priority,
       teamLead: teamLead || undefined,
     });
@@ -87,6 +147,9 @@ export function ProjectsHeader({
     setProjectDescription("");
     setStartingPhase("product-modeling");
     setGithubUrl("");
+    setGithubToken("");
+    setShowToken(false);
+    setTokenValidation({ status: 'idle' });
     setPriority("medium");
     setTeamLead("");
     setIsNewProjectOpen(false);
@@ -111,7 +174,7 @@ export function ProjectsHeader({
               <span className="hidden sm:inline">Add Project</span>
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create New Project</DialogTitle>
               <DialogDescription>
@@ -119,7 +182,7 @@ export function ProjectsHeader({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 py-4">
+            <div className="space-y-4 py-4 overflow-y-auto max-h-[calc(90vh-200px)]">
               <div className="flex flex-col gap-2">
                 <label htmlFor="projectName" className="text-sm font-medium">
                   Project Name
@@ -187,7 +250,7 @@ export function ProjectsHeader({
 
               <div className="flex flex-col gap-2">
                 <label htmlFor="githubUrl" className="text-sm font-medium">
-                  GitHub Repository URL
+                  GitHub Repository URL <span className="text-destructive">*</span>
                 </label>
                 <Input
                   id="githubUrl"
@@ -195,7 +258,65 @@ export function ProjectsHeader({
                   placeholder="https://github.com/username/repository"
                   value={githubUrl}
                   onChange={(e) => setGithubUrl(e.target.value)}
+                  required
                 />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label htmlFor="githubToken" className="text-sm font-medium">
+                  GitHub Personal Access Token <span className="text-destructive">*</span>
+                </label>
+                <div className="relative">
+                  <Input
+                    id="githubToken"
+                    type={showToken ? "text" : "password"}
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                    value={githubToken}
+                    onChange={(e) => handleTokenChange(e.target.value)}
+                    required
+                    className="pr-20"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    {tokenValidation.status === 'validating' && (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                    {tokenValidation.status === 'valid' && (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    )}
+                    {tokenValidation.status === 'invalid' && (
+                      <XCircle className="h-4 w-4 text-destructive" />
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => setShowToken(!showToken)}
+                    >
+                      {showToken ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                {tokenValidation.message && (
+                  <p className={`text-xs ${tokenValidation.status === 'valid' ? 'text-green-600' : 'text-destructive'}`}>
+                    {tokenValidation.message}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Required for AI agent to push changes. 
+                  <a 
+                    href="https://github.com/settings/tokens/new?scopes=repo" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline ml-1"
+                  >
+                    Create token
+                  </a>
+                </p>
               </div>
 
               <div className="flex flex-col gap-2">
@@ -215,7 +336,11 @@ export function ProjectsHeader({
               </div>
 
               <div className="flex gap-2 pt-4">
-                <Button onClick={handleAddProject} className="flex-1">
+                <Button 
+                  onClick={handleAddProject} 
+                  className="flex-1"
+                  disabled={!projectName || !githubUrl || !githubToken || tokenValidation.status !== 'valid'}
+                >
                   Add Project
                 </Button>
                 <Button
@@ -226,6 +351,9 @@ export function ProjectsHeader({
                     setProjectDescription("");
                     setStartingPhase("product-modeling");
                     setGithubUrl("");
+                    setGithubToken("");
+                    setShowToken(false);
+                    setTokenValidation({ status: 'idle' });
                     setPriority("medium");
                     setTeamLead("");
                   }}

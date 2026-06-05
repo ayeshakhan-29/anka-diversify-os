@@ -58,6 +58,7 @@ export default function ProjectsPage() {
     description: string;
     phase: string;
     githubUrl: string;
+    githubToken: string;
     priority: string;
     teamLead?: string;
   }) => {
@@ -68,6 +69,7 @@ export default function ProjectsPage() {
         phase: projectData.phase,
         priority: projectData.priority,
         githubUrl: projectData.githubUrl || undefined,
+        githubToken: projectData.githubToken,
       });
 
       setProjectsList((prev) => [created, ...prev]);

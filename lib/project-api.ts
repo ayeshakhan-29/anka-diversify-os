@@ -126,6 +126,7 @@ export const projectApi = {
     phase?: string;
     priority?: string;
     githubUrl?: string;
+    githubToken?: string;
   }): Promise<Project> {
     const res = await fetch(`${BASE_URL}/projects`, {
       method: "POST",
@@ -135,6 +136,49 @@ export const projectApi = {
     if (!res.ok) throw new Error(`POST /projects failed: ${res.status}`);
     const { data } = await res.json();
     return mapProject(data);
+  },
+
+  async validateGitHubToken(token: string): Promise<{ valid: boolean; username?: string; scopes?: string[]; error?: string }> {
+    try {
+      const res = await fetch(`${BASE_URL}/projects/validate-github-token`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ githubToken: token }),
+      });
+      
+      const responseData = await res.json();
+      
+      if (res.ok) {
+        return responseData.data;
+      } else {
+        return { 
+          valid: false, 
+          error: responseData.error || `Validation failed with status ${res.status}` 
+        };
+      }
+    } catch (error: any) {
+      console.error('Validation API error:', error);
+      return { 
+        valid: false, 
+        error: `Network error: ${error.message}. Make sure backend is running.` 
+      };
+    }
+  },
+
+  async updateGitHubToken(projectId: string, token: string): Promise<{ username?: string; scopes?: string[] }> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/github-token`, {
+      method: "PUT",
+      headers: getHeaders(),
+      body: JSON.stringify({ githubToken: token }),
+    });
+    
+    if (!res.ok) {
+      const { error } = await res.json();
+      throw new Error(error || 'Failed to update GitHub token');
+    }
+    
+    const { data } = await res.json();
+    return data;
   },
 
   async getById(id: string): Promise<Project> {
