@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users, CheckCircle2, AlertTriangle } from "lucide-react";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
@@ -77,7 +78,7 @@ export function UserInvitation({ recentUsers = [] }: UserInvitationProps) {
           Invite Team Member
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 overflow-hidden">
         {message && (
           <Alert variant={isSuccess ? "default" : "destructive"}>
             {isSuccess ? (
@@ -114,18 +115,18 @@ export function UserInvitation({ recentUsers = [] }: UserInvitationProps) {
 
           <div>
             <Label htmlFor="role" className="mb-2">Role</Label>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="w-full p-2 border rounded-md"
-            >
-              <option value="admin">Admin</option>
-              <option value="manager">Manager</option>
-              <option value="developer">Developer</option>
-              <option value="designer">Designer</option>
-              <option value="viewer">Viewer</option>
-            </select>
+            <Select value={role} onValueChange={setRole}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="manager">Manager</SelectItem>
+                <SelectItem value="developer">Developer</SelectItem>
+                <SelectItem value="designer">Designer</SelectItem>
+                <SelectItem value="viewer">Viewer</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <Button
@@ -153,15 +154,15 @@ export function UserInvitation({ recentUsers = [] }: UserInvitationProps) {
                   key={user.id}
                   className="flex items-center justify-between p-2 rounded-lg hover:bg-secondary/50"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <Avatar className="h-8 w-8">
                       <AvatarFallback className="bg-secondary text-foreground text-xs">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
-                    <div>
-                      <p className="text-sm font-medium">{user.name ?? "—"}</p>
-                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{user.name ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                     </div>
                   </div>
                   <Badge variant="outline" className="text-xs">

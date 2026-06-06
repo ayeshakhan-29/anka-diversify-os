@@ -107,10 +107,10 @@ export function Header({ title, breadcrumb }: HeaderProps) {
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>New Project</DropdownMenuItem>
-            <DropdownMenuItem>New Task</DropdownMenuItem>
-            <DropdownMenuItem>New Sprint</DropdownMenuItem>
-            <DropdownMenuItem>New Document</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push("/development/projects")}>New Project</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push("/development/projects")}>New Task</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push("/development/sprints")}>New Sprint</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push("/development/documents")}>New Document</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
