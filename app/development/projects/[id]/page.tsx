@@ -120,7 +120,7 @@ export default function ProjectDetailPage({
   const seedProject = mockProjects.find((p) => p.id === id) || mockProjects[0];
   const [project, setProject] = useState<Project>(seedProject);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [tasksLoading, setTasksLoading] = useState(true);
+  const [, setTasksLoading] = useState(true);
 
   // Fetch project metadata from backend
   useEffect(() => {
@@ -231,7 +231,12 @@ export default function ProjectDetailPage({
 
   // ── activities state ──
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [activeTab, setActiveTab] = useState("kanban");
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem(`project-tab-${id}`) || "kanban";
+    }
+    return "kanban";
+  });
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── agent → IDE bridge ──
@@ -673,7 +678,7 @@ export default function ProjectDetailPage({
           </div>
 
           {/* ── Tabs ── */}
-          <Tabs value={activeTab} className="w-full" onValueChange={(v) => { setActiveTab(v); if (v === "activity") refreshActivities(); }}>
+          <Tabs value={activeTab} className="w-full" onValueChange={(v) => { setActiveTab(v); sessionStorage.setItem(`project-tab-${id}`, v); if (v === "activity") refreshActivities(); }}>
             <div className="px-4 border-t overflow-x-auto">
               <TabsList className="h-12 bg-transparent gap-2 sm:gap-4 -mb-px w-max sm:w-full">
                 {["kanban", "files", "code", "chat", "activity", "ai-assistant"].map((tab) => (
