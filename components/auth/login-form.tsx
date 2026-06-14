@@ -91,12 +91,6 @@ export default function LoginForm() {
           Enter your email and password to access your account
         </p>
 
-        <div className="mb-6 p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-600">
-          <p className="font-medium text-gray-700 mb-1">Test credentials</p>
-          <p>Email: <span className="font-mono">admin@anka.os</span></p>
-          <p>Password: <span className="font-mono">admin@123</span></p>
-        </div>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <Alert variant="destructive">

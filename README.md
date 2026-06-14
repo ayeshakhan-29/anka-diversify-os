@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Anka Diversify
+
+A full-stack project management and AI development platform for software teams.
+
+## Tech Stack
+
+- **Frontend**: Next.js 16, React 19, Tailwind CSS v4, TypeScript
+- **Backend**: Express 5, Prisma 5, PostgreSQL, TypeScript
 
 ## Getting Started
 
-First, run the development server:
+### Frontend
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd anka-diversify-os
+npm install
+npm run dev       # starts on http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Backend
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cd anka-os-backend
+npm install
+npm run dev       # starts on http://localhost:3001
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Environment Variables
 
-## Learn More
+**Frontend** (`.env.local`):
+```
+NEXT_PUBLIC_API_URL=http://localhost:3001/api
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
 
-To learn more about Next.js, take a look at the following resources:
+**Backend** (`.env`):
+```
+DATABASE_URL=postgresql://...
+OPENAI_API_KEY=...
+JWT_SECRET=...
+PORT=3001
+FRONTEND_URL=http://localhost:3000
+GITHUB_TOKEN=...
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_REGION=...
+AWS_S3_BUCKET=...
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Test Credentials
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Field    | Value           |
+|----------|-----------------|
+| Email    | admin@anka.os   |
+| Password | admin@123       |
 
-## Deploy on Vercel
+## Features
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Kanban board with drag-and-drop task management
+- AI coding agent — proposes multi-file changes via GPT-4 with diff review and GitHub push
+- Project-scoped AI assistant with GitHub repo context injection
+- General AI assistant with persistent sessions and file/PDF/DOCX attachment support
+- Real-time project chat rooms and activity feed
+- S3 file upload (presign → direct upload → confirm)
+- Sprint planning, team management, invite system, and role-based admin panel
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Commands
+
+```bash
+npm run build     # production build
+npm run lint      # eslint
+npm run db:migrate    # create + apply DB migration
+npm run db:studio     # Prisma Studio GUI
+```
