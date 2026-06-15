@@ -208,3 +208,41 @@ export interface Department {
   members: TeamMember[];
   projects: Project[];
 }
+
+export interface GitCommitItem {
+  sha: string;
+  shortSha: string;
+  message: string;
+  authorName: string;
+  authorLogin: string;
+  authorAvatar: string;
+  timestamp: string;
+  url: string;
+  branch: string;
+}
+
+export interface GitBranchItem {
+  name: string;
+  isDefault: boolean;
+  commitSha: string;
+  url: string;
+  protected: boolean;
+}
+
+export interface GitPullItem {
+  number: number;
+  title: string;
+  author: string;
+  state: "open" | "closed" | "merged";
+  createdAt: string;
+  updatedAt: string;
+  mergedAt?: string;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  url: string;
+  draft: boolean;
+  labels: string[];
+  baseBranch: string;
+  headBranch: string;
+}

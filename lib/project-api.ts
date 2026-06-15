@@ -1,4 +1,4 @@
-import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember, Sprint, ChecklistItem } from "./types";
+import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember, Sprint, ChecklistItem, GitCommitItem, GitBranchItem, GitPullItem } from "./types";
 
 export interface AppNotification {
   id: string;
@@ -657,6 +657,30 @@ export const projectApi = {
   async getAllDocuments(): Promise<(ProjectFile & { projectName: string })[]> {
     const res = await fetch(`${BASE_URL}/projects/documents/all`, { headers: getHeaders() });
     if (!res.ok) throw new Error(`GET all documents failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  // ── Git (live GitHub API) ─────────────────────────────────────────────────
+
+  async getGitCommits(projectId: string, branch?: string): Promise<GitCommitItem[]> {
+    const params = branch && branch !== "all" ? `?branch=${encodeURIComponent(branch)}` : "";
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/git/commits${params}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET git commits failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  async getGitBranches(projectId: string): Promise<GitBranchItem[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/git/branches`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET git branches failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  async getGitPulls(projectId: string): Promise<GitPullItem[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/git/pulls`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET git pulls failed: ${res.status}`);
     const { data } = await res.json();
     return data;
   },
