@@ -12,12 +12,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { projects as mockProjects, users as mockUsers } from "@/lib/mock-data"
-import { 
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { users as mockUsers } from "@/lib/mock-data"
+import {
   Search, Plus, Filter, Layers, FileText, Users, Calendar,
   Target, Lightbulb, PenTool, Workflow, BarChart3, CheckCircle2,
   Clock, AlertCircle, ArrowRight, ExternalLink, Folder, Star,
-  TrendingUp, Eye, MessageSquare, Paperclip
+  TrendingUp, Eye, MessageSquare, Paperclip, Info
 } from "lucide-react"
 import Link from "next/link"
 
@@ -125,7 +126,10 @@ export default function ProductModelingPage() {
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Product Modeling</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-foreground">Product Modeling</h1>
+              <Badge variant="outline" className="text-xs">Demo data</Badge>
+            </div>
             <p className="text-muted-foreground">Design, validate, and plan product features before development</p>
           </div>
           <Dialog open={isNewModelOpen} onOpenChange={setIsNewModelOpen}>
@@ -186,6 +190,13 @@ export default function ProductModelingPage() {
             </DialogContent>
           </Dialog>
         </div>
+
+        <Alert>
+          <Info />
+          <AlertDescription>
+            This page shows sample product models for illustration — product modeling isn&apos;t wired up to the backend yet.
+          </AlertDescription>
+        </Alert>
 
         {/* Stats Overview */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

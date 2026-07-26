@@ -1,9 +1,10 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -18,7 +19,8 @@ import {
   TrendingUp,
   Play,
 } from "lucide-react"
-import { projects, sprints, tasks, gitCommits, teamMembers } from "@/lib/mock-data"
+import { projectApi } from "@/lib/project-api"
+import type { Project, Sprint, GitCommitItem } from "@/lib/types"
 import {
   Area,
   AreaChart,
@@ -28,7 +30,9 @@ import {
   Tooltip,
 } from "recharts"
 
-const velocityData = [
+// Illustrative only — per-sprint historical velocity isn't tracked yet, so this
+// trend is sample data rather than derived from real sprints. Labeled "Demo" in the UI.
+const demoVelocityTrend = [
   { sprint: "S8", velocity: 24 },
   { sprint: "S9", velocity: 28 },
   { sprint: "S10", velocity: 32 },
@@ -45,8 +49,49 @@ const statusColors = {
 }
 
 export default function DevelopmentOverview() {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [activeSprint, setActiveSprint] = useState<Sprint | null>(null)
+  const [gitCommits, setGitCommits] = useState<GitCommitItem[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+
+    projectApi.getAll().then(async (allProjects) => {
+      if (cancelled) return
+      setProjects(allProjects)
+
+      const devProjects = allProjects.filter((p) => p.phase === "development" || p.phase === "product-modeling")
+
+      // Find the first active sprint across dev projects (no global sprints endpoint)
+      for (const p of devProjects) {
+        try {
+          const projectSprints = await projectApi.getSprints(p.id)
+          const active = projectSprints.find((s) => s.status === "active")
+          if (active) {
+            if (!cancelled) setActiveSprint(active)
+            break
+          }
+        } catch { /* project has no sprint data */ }
+      }
+
+      // Merge recent commits from projects with a connected GitHub repo
+      const withRepo = allProjects.filter((p) => p.githubUrl).slice(0, 5)
+      const commitLists = await Promise.all(
+        withRepo.map((p) => projectApi.getGitCommits(p.id).catch(() => [] as GitCommitItem[]))
+      )
+      if (!cancelled) {
+        const merged = commitLists
+          .flat()
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        setGitCommits(merged.slice(0, 4))
+      }
+    })
+
+    return () => { cancelled = true }
+  }, [])
+
   const devProjects = projects.filter((p) => p.phase === "development" || p.phase === "product-modeling")
-  const activeSprint = sprints.find((s) => s.status === "active")
+  const tasks = projects.flatMap((p) => p.tasks)
   const inProgressTasks = tasks.filter((t) => t.status === "in-progress")
   const todoTasks = tasks.filter((t) => t.status === "todo")
   const reviewTasks = tasks.filter((t) => t.status === "review")
@@ -101,7 +146,7 @@ export default function DevelopmentOverview() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Sprint Velocity</p>
-                  <p className="text-2xl font-semibold text-foreground">34</p>
+                  <p className="text-2xl font-semibold text-foreground">{activeSprint?.velocity ?? "—"}</p>
                 </div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
                   <TrendingUp className="h-5 w-5 text-accent" />
@@ -217,15 +262,16 @@ export default function DevelopmentOverview() {
 
           {/* Velocity Chart */}
           <Card className="bg-card border-border">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg font-semibold text-foreground">
-                Sprint Velocity
+                Sprint Velocity Trend
               </CardTitle>
+              <Badge variant="outline" className="text-xs">Demo data</Badge>
             </CardHeader>
             <CardContent>
               <div className="h-48">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={velocityData}>
+                  <AreaChart data={demoVelocityTrend}>
                     <defs>
                       <linearGradient id="velocityGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
@@ -284,9 +330,15 @@ export default function DevelopmentOverview() {
               </Link>
             </CardHeader>
             <CardContent className="space-y-3">
-              {gitCommits.slice(0, 4).map((commit) => (
+              {gitCommits.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <GitBranch className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No commits yet — connect a GitHub repo to a project</p>
+                </div>
+              )}
+              {gitCommits.map((commit) => (
                 <div
-                  key={commit.id}
+                  key={commit.sha}
                   className="flex items-start gap-3 p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
                 >
                   <div className="mt-0.5">
@@ -298,21 +350,20 @@ export default function DevelopmentOverview() {
                     </p>
                     <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                       <code className="px-1.5 py-0.5 rounded bg-secondary font-mono">
-                        {commit.hash}
+                        {commit.shortSha}
                       </code>
                       <span>on {commit.branch}</span>
                     </div>
                     <div className="flex items-center gap-2 mt-2">
                       <Avatar className="h-5 w-5">
+                        <AvatarImage src={commit.authorAvatar} />
                         <AvatarFallback className="bg-secondary text-foreground text-[8px]">
-                          {commit.author.name.split(" ").map((n) => n[0]).join("")}
+                          {commit.authorName.split(" ").map((n) => n[0]).join("")}
                         </AvatarFallback>
                       </Avatar>
                       <span className="text-xs text-muted-foreground">
-                        {commit.author.name}
+                        {commit.authorName}
                       </span>
-                      <span className="text-xs text-success">+{commit.additions}</span>
-                      <span className="text-xs text-destructive">-{commit.deletions}</span>
                     </div>
                   </div>
                 </div>
