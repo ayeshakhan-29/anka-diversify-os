@@ -15,6 +15,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProjectAIAssistant } from "@/components/ai/project-ai-assistant";
 import { ProjectIDE } from "@/components/project/project-ide";
+import { PhaseStepper } from "@/components/project/phase-stepper";
+import { PhaseDetailView } from "@/components/project/phase-detail-view";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,9 +40,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { projects as mockProjects } from "@/lib/mock-data";
 import { projectApi } from "@/lib/project-api";
-import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember } from "@/lib/types";
+import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember, WorkflowPhase, ProjectPhaseState } from "@/lib/types";
 import { inviteApi } from "@/lib/invite-api";
 import type { TeamUser } from "@/lib/invite-api";
 import {
@@ -116,17 +117,33 @@ export default function ProjectDetailPage({
   const { id } = use(params);
   const router = useRouter();
 
-  // Seed from mock so the page renders immediately, then hydrate from backend
-  const seedProject = mockProjects.find((p) => p.id === id) || mockProjects[0];
-  const [project, setProject] = useState<Project>(seedProject);
+  // Empty shell so the page renders immediately, then hydrate from backend
+  const emptyProject: Project = {
+    id,
+    name: "",
+    description: "",
+    phase: "product-modeling",
+    progress: 0,
+    team: [],
+    members: [],
+    startDate: new Date().toISOString(),
+    dueDate: new Date().toISOString(),
+    tasks: [],
+    priority: "medium",
+    status: "active",
+  };
+  const [project, setProject] = useState<Project>(emptyProject);
+  const [projectLoading, setProjectLoading] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [, setTasksLoading] = useState(true);
 
   // Fetch project metadata from backend
   useEffect(() => {
-    projectApi.getById(id).then((p) => {
-      setProject(p);
-    }).catch(() => { /* keep mock seed */ });
+    setProjectLoading(true);
+    projectApi.getById(id)
+      .then((p) => setProject(p))
+      .catch(() => { /* keep empty shell */ })
+      .finally(() => setProjectLoading(false));
   }, [id]);
 
   // Fetch real tasks from backend (separate from project metadata)
@@ -134,7 +151,7 @@ export default function ProjectDetailPage({
     setTasksLoading(true);
     projectApi.getTasks(id)
       .then((t) => setTasks(t))
-      .catch(() => setTasks(seedProject.tasks)) // fall back to mock tasks
+      .catch(() => setTasks([]))
       .finally(() => setTasksLoading(false));
   }, [id]);
 
@@ -229,6 +246,13 @@ export default function ProjectDetailPage({
     } catch { /* silent */ }
   };
 
+  // ── phased workflow state ──
+  const [phaseStates, setPhaseStates] = useState<ProjectPhaseState[]>([]);
+  const [workflowPhase, setWorkflowPhase] = useState<WorkflowPhase>("requirements");
+  const refreshPhaseStates = useCallback(() => {
+    projectApi.getPhaseStates(id).then(setPhaseStates).catch(() => { });
+  }, [id]);
+
   // ── activities state ──
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activeTab, setActiveTab] = useState(() => {
@@ -252,6 +276,7 @@ export default function ProjectDetailPage({
   }, [id]);
 
   useEffect(() => { refreshActivities(); }, [refreshActivities]);
+  useEffect(() => { refreshPhaseStates(); }, [refreshPhaseStates]);
 
   // Poll every 8s when activity tab is open
   useEffect(() => {
@@ -601,7 +626,7 @@ export default function ProjectDetailPage({
               </Link>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                  <h1 className="text-lg sm:text-xl font-bold truncate">{project.name}</h1>
+                  <h1 className="text-lg sm:text-xl font-bold truncate">{projectLoading ? "Loading…" : project.name}</h1>
                   <Badge variant="outline" className={phaseColors[project.phase] + " shrink-0"}>
                     {phaseLabels[project.phase]}
                   </Badge>
@@ -678,24 +703,31 @@ export default function ProjectDetailPage({
           </div>
 
           {/* ── Tabs ── */}
-          <Tabs value={activeTab} className="w-full" onValueChange={(v) => { setActiveTab(v); sessionStorage.setItem(`project-tab-${id}`, v); if (v === "activity") refreshActivities(); }}>
+          <Tabs value={activeTab} className="w-full" onValueChange={(v) => { setActiveTab(v); sessionStorage.setItem(`project-tab-${id}`, v); if (v === "activity") refreshActivities(); if (v === "workflow") refreshPhaseStates(); }}>
             <div className="px-4 border-t overflow-x-auto">
               <TabsList className="h-12 bg-transparent gap-2 sm:gap-4 -mb-px w-max sm:w-full">
-                {["kanban", "files", "code", "chat", "activity", "ai-assistant"].map((tab) => (
+                {["kanban", "workflow", "files", "code", "chat", "activity", "ai-assistant"].map((tab) => (
                   <TabsTrigger
                     key={tab}
                     value={tab}
                     className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent capitalize whitespace-nowrap text-xs sm:text-sm"
                   >
                     {tab === "kanban" ? "Kanban Board"
-                      : tab === "files" ? "Files"
-                        : tab === "code" ? "Code"
-                          : tab === "ai-assistant" ? "AI"
-                            : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                      : tab === "workflow" ? "Workflow"
+                        : tab === "files" ? "Files"
+                          : tab === "code" ? "Code"
+                            : tab === "ai-assistant" ? "AI"
+                              : tab.charAt(0).toUpperCase() + tab.slice(1)}
                   </TabsTrigger>
                 ))}
               </TabsList>
             </div>
+
+            {/* ── Workflow ── */}
+            <TabsContent value="workflow" className="mt-0 flex-1">
+              <PhaseStepper states={phaseStates} activePhase={workflowPhase} onSelectPhase={setWorkflowPhase} />
+              <PhaseDetailView projectId={id} phase={workflowPhase} onStatesChange={setPhaseStates} />
+            </TabsContent>
 
             {/* ── Kanban ── */}
             <TabsContent value="kanban" className="mt-0 flex-1">

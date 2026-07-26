@@ -1,4 +1,4 @@
-import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember, Sprint, ChecklistItem, GitCommitItem, GitBranchItem, GitPullItem } from "./types";
+import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember, Sprint, ChecklistItem, GitCommitItem, GitBranchItem, GitPullItem, ProjectPhaseState, PhaseArtifact, PhaseApproval, WorkflowPhase, WorkflowRun } from "./types";
 
 export interface AppNotification {
   id: string;
@@ -681,6 +681,106 @@ export const projectApi = {
   async getGitPulls(projectId: string): Promise<GitPullItem[]> {
     const res = await fetch(`${BASE_URL}/projects/${projectId}/git/pulls`, { headers: getHeaders() });
     if (!res.ok) throw new Error(`GET git pulls failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  // ── Phased workflow ────────────────────────────────────────────────────────
+
+  async getPhaseStates(projectId: string): Promise<ProjectPhaseState[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/phases`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET phase states failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  async startPhase(projectId: string, phase: WorkflowPhase): Promise<ProjectPhaseState> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/phases/${phase}/start`, {
+      method: "POST",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error(`POST start phase failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  async requestPhaseApproval(projectId: string, phase: WorkflowPhase): Promise<ProjectPhaseState> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/phases/${phase}/request-approval`, {
+      method: "POST",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error(`POST request approval failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  async approvePhase(projectId: string, phase: WorkflowPhase, comments?: string): Promise<ProjectPhaseState[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/phases/${phase}/approve`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ comments }),
+    });
+    if (!res.ok) throw new Error(`POST approve phase failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  async requestPhaseChanges(projectId: string, phase: WorkflowPhase, comments?: string): Promise<ProjectPhaseState> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/phases/${phase}/request-changes`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ comments }),
+    });
+    if (!res.ok) throw new Error(`POST request changes failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  async getPhaseApprovals(projectId: string, phase?: WorkflowPhase): Promise<PhaseApproval[]> {
+    const params = phase ? `?phase=${encodeURIComponent(phase)}` : "";
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/phases/approvals${params}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET phase approvals failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  async getPhaseArtifacts(projectId: string, phase?: WorkflowPhase): Promise<PhaseArtifact[]> {
+    const params = phase ? `?phase=${encodeURIComponent(phase)}` : "";
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/phases/artifacts${params}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET phase artifacts failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  async createPhaseArtifact(projectId: string, data: {
+    phase: WorkflowPhase;
+    type: string;
+    title: string;
+    content: string;
+  }): Promise<PhaseArtifact> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/phases/artifacts`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(`POST phase artifact failed: ${res.status}`);
+    const { data: artifact } = await res.json();
+    return artifact;
+  },
+
+  async runAutomatedPhase(projectId: string, phase: WorkflowPhase): Promise<{ artifact: PhaseArtifact; workflowRun: WorkflowRun }> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/phases/${phase}/run`, {
+      method: "POST",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error(`POST run automated phase failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  async getWorkflowRuns(projectId: string): Promise<WorkflowRun[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/phases/runs`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET workflow runs failed: ${res.status}`);
     const { data } = await res.json();
     return data;
   },

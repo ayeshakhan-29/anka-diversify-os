@@ -246,3 +246,78 @@ export interface GitPullItem {
   baseBranch: string;
   headBranch: string;
 }
+
+// ── Phased workflow (Documentation → Architecture → Implementation → Testing) ──
+// Distinct from ProjectPhase above, which is the coarse product-modeling/development/
+// marketing category. This is the fine-grained lifecycle within a project.
+
+export type WorkflowPhase =
+  | "requirements"
+  | "documentation"
+  | "architecture"
+  | "implementation"
+  | "testing"
+  | "review";
+
+export const WORKFLOW_PHASES: WorkflowPhase[] = [
+  "requirements",
+  "documentation",
+  "architecture",
+  "implementation",
+  "testing",
+  "review",
+];
+
+export type WorkflowPhaseStatus =
+  | "not_started"
+  | "in_progress"
+  | "awaiting_approval"
+  | "approved"
+  | "completed";
+
+export interface ProjectPhaseState {
+  id: string;
+  projectId: string;
+  phase: WorkflowPhase;
+  status: WorkflowPhaseStatus;
+  startedAt?: string;
+  completedAt?: string;
+  approvedById?: string;
+  approvedAt?: string;
+  notes?: string;
+}
+
+export interface PhaseArtifact {
+  id: string;
+  projectId: string;
+  phase: WorkflowPhase;
+  type: string;
+  title: string;
+  content: string;
+  version: number;
+  createdBy: string;
+  createdAt: string;
+  approved: boolean;
+}
+
+export interface PhaseApproval {
+  id: string;
+  projectId: string;
+  phase: WorkflowPhase;
+  approvedById: string;
+  approvedAt: string;
+  decision: "approved" | "changes_requested" | "rejected";
+  comments?: string;
+}
+
+export interface WorkflowRun {
+  id: string;
+  projectId: string;
+  triggerType: string;
+  currentPhase: WorkflowPhase;
+  status: "running" | "completed" | "failed" | "cancelled";
+  startedAt: string;
+  completedAt?: string;
+  modelUsage?: { model: string; prompt_tokens: number; completion_tokens: number };
+  costUSD?: number;
+}
