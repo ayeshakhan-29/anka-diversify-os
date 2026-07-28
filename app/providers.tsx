@@ -1,13 +1,31 @@
 'use client'
 
 import { ThemeProvider } from "@/components/theme-provider";
-import { AuthProvider } from "@/context/AuthContext";
-import type { ReactNode } from "react";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, type ReactNode } from "react";
+
+function AuthGuard({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    const isPublicRoute = pathname === "/" || pathname.startsWith("/auth") || pathname.startsWith("/invite");
+    if (!isLoading && !isAuthenticated && !isPublicRoute) {
+      router.push("/");
+    }
+  }, [isAuthenticated, isLoading, pathname, router]);
+
+  return <>{children}</>;
+}
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider defaultTheme="light">
-      <AuthProvider>{children}</AuthProvider>
+      <AuthProvider>
+        <AuthGuard>{children}</AuthGuard>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

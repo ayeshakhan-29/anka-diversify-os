@@ -43,6 +43,15 @@ function getHeaders(): Record<string, string> {
   };
 }
 
+function checkStatus(res: Response): Response {
+  if (res.status === 401 && typeof window !== "undefined") {
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("user");
+    window.dispatchEvent(new Event("auth:unauthorized"));
+  }
+  return res;
+}
+
 // in-progress ↔ in_progress conversion
 function toFrontendStatus(s: string): Task["status"] {
   if (s === "in_progress") return "in-progress";
@@ -145,6 +154,7 @@ export const projectApi = {
         headers: getHeaders(),
         body: JSON.stringify({ githubToken: token }),
       });
+      checkStatus(res);
       
       const responseData = await res.json();
       
@@ -593,6 +603,7 @@ export const projectApi = {
 
   async getUnreadCount(): Promise<number> {
     const res = await fetch(`${BASE_URL}/notifications/unread-count`, { headers: getHeaders() });
+    checkStatus(res);
     if (!res.ok) return 0;
     const { count } = await res.json();
     return count as number;
