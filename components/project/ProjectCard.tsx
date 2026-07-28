@@ -28,6 +28,7 @@ import {
   Circle,
   CheckCircle2,
   Clock,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -43,6 +44,7 @@ interface ProjectCardProps {
   phaseColors: Record<string, string>;
   phaseLabels: Record<string, string>;
   priorityColors: Record<string, string>;
+  onDeleteProject?: (id: string) => void;
 }
 
 export function ProjectCard({
@@ -53,6 +55,7 @@ export function ProjectCard({
   phaseColors,
   phaseLabels,
   priorityColors,
+  onDeleteProject,
 }: ProjectCardProps) {
   return (
     <Card
@@ -94,19 +97,28 @@ export function ProjectCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Open Project
+              <DropdownMenuItem asChild>
+                <Link href={`/development/projects/${project.id}`}>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open Project
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <FolderKanban className="h-4 w-4 mr-2" />
-                View Kanban
+              <DropdownMenuItem asChild>
+                <Link href={`/development/projects/${project.id}`}>
+                  <FolderKanban className="h-4 w-4 mr-2" />
+                  View Kanban
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Files
-              </DropdownMenuItem>
+              {onDeleteProject && (
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive cursor-pointer"
+                  onClick={() => onDeleteProject(project.id)}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Project
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

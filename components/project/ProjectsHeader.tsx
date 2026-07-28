@@ -75,6 +75,7 @@ export function ProjectsHeader({
   }>({ status: 'idle' });
   const [priority, setPriority] = useState("medium");
   const [teamLead, setTeamLead] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validateToken = async (token: string) => {
     if (!token || token.length < 20) {
@@ -121,7 +122,7 @@ export function ProjectsHeader({
     }
   };
 
-  const handleAddProject = () => {
+  const handleAddProject = async () => {
     if (!projectName || !githubUrl || !githubToken) {
       console.error("Project name, GitHub URL, and GitHub token are required");
       return;
@@ -132,27 +133,34 @@ export function ProjectsHeader({
       return;
     }
 
-    onAddProject({
-      name: projectName,
-      description: projectDescription,
-      phase: startingPhase,
-      githubUrl: githubUrl,
-      githubToken: githubToken,
-      priority: priority,
-      teamLead: teamLead || undefined,
-    });
+    setIsSubmitting(true);
+    try {
+      await onAddProject({
+        name: projectName,
+        description: projectDescription,
+        phase: startingPhase,
+        githubUrl: githubUrl,
+        githubToken: githubToken,
+        priority: priority,
+        teamLead: teamLead || undefined,
+      });
 
-    // Reset form
-    setProjectName("");
-    setProjectDescription("");
-    setStartingPhase("product-modeling");
-    setGithubUrl("");
-    setGithubToken("");
-    setShowToken(false);
-    setTokenValidation({ status: 'idle' });
-    setPriority("medium");
-    setTeamLead("");
-    setIsNewProjectOpen(false);
+      // Reset form
+      setProjectName("");
+      setProjectDescription("");
+      setStartingPhase("product-modeling");
+      setGithubUrl("");
+      setGithubToken("");
+      setShowToken(false);
+      setTokenValidation({ status: 'idle' });
+      setPriority("medium");
+      setTeamLead("");
+      setIsNewProjectOpen(false);
+    } catch (err) {
+      console.error("Error creating project:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -338,10 +346,17 @@ export function ProjectsHeader({
               <div className="flex gap-2 pt-4">
                 <Button 
                   onClick={handleAddProject} 
-                  className="flex-1"
-                  disabled={!projectName || !githubUrl || !githubToken || tokenValidation.status !== 'valid'}
+                  className="flex-1 gap-2"
+                  disabled={isSubmitting || !projectName || !githubUrl || !githubToken || tokenValidation.status !== 'valid'}
                 >
-                  Add Project
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Creating Project...</span>
+                    </>
+                  ) : (
+                    "Add Project"
+                  )}
                 </Button>
                 <Button
                   variant="outline"

@@ -15,6 +15,7 @@ import {
   Circle,
   CheckCircle2,
   Clock,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -37,6 +38,7 @@ interface ProjectsListProps {
     inProgress: number;
     done: number;
   };
+  onDeleteProject?: (id: string) => void;
 }
 
 export function ProjectsList({
@@ -46,6 +48,7 @@ export function ProjectsList({
   priorityColors,
   getProjectProgress,
   getTaskStats,
+  onDeleteProject,
 }: ProjectsListProps) {
   return (
     <div className="space-y-4">
@@ -92,19 +95,28 @@ export function ProjectsList({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      Open Project
+                    <DropdownMenuItem asChild>
+                      <Link href={`/development/projects/${project.id}`}>
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Open Project
+                      </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <FolderKanban className="h-4 w-4 mr-2" />
-                      View Kanban
+                    <DropdownMenuItem asChild>
+                      <Link href={`/development/projects/${project.id}`}>
+                        <FolderKanban className="h-4 w-4 mr-2" />
+                        View Kanban
+                      </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem>
-                      <Upload className="h-4 w-4 mr-2" />
-                      Upload Files
-                    </DropdownMenuItem>
+                    {onDeleteProject && (
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive cursor-pointer"
+                        onClick={() => onDeleteProject(project.id)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Project
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>

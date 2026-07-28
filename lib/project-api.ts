@@ -198,6 +198,15 @@ export const projectApi = {
     return mapProject(data);
   },
 
+  async delete(id: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/projects/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    checkStatus(res);
+    if (!res.ok) throw new Error(`DELETE /projects/${id} failed: ${res.status}`);
+  },
+
   async update(
     id: string,
     payload: {

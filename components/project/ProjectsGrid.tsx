@@ -13,6 +13,7 @@ interface ProjectsGridProps {
     inProgress: number;
     done: number;
   };
+  onDeleteProject?: (id: string) => void;
 }
 
 export function ProjectsGrid({
@@ -22,13 +23,14 @@ export function ProjectsGrid({
   priorityColors,
   getProjectProgress,
   getTaskStats,
+  onDeleteProject,
 }: ProjectsGridProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {filteredProjects.map((project) => {
         const progress = getProjectProgress(project);
         const stats = getTaskStats(project);
-        const teamMembers = project.team;
+        const teamMembers = project.team || [];
 
         return (
           <ProjectCard
@@ -40,6 +42,7 @@ export function ProjectsGrid({
             phaseColors={phaseColors}
             phaseLabels={phaseLabels}
             priorityColors={priorityColors}
+            onDeleteProject={onDeleteProject}
           />
         );
       })}

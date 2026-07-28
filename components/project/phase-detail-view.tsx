@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle2, MessageSquareWarning, FileText, History, Sparkles, Wand2, Coins, Copy, Check, Download } from "lucide-react";
+import { CheckCircle2, MessageSquareWarning, FileText, History, Sparkles, Wand2, Coins, Copy, Check, Download, Loader2 } from "lucide-react";
 import { projectApi } from "@/lib/project-api";
 import type { WorkflowPhase, ProjectPhaseState, PhaseArtifact, PhaseApproval, WorkflowRun } from "@/lib/types";
 
@@ -241,8 +241,17 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
                   onClick={() => setBriefDialogOpen(true)}
                   disabled={isApproved || generating}
                 >
-                  <Wand2 className="h-3.5 w-3.5" />
-                  {generating ? "Generating…" : "Generate with AI"}
+                  {generating ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Generating…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="h-3.5 w-3.5" />
+                      <span>Generate with AI</span>
+                    </>
+                  )}
                 </Button>
                 {isApproved ? (
                   <Button variant="outline" size="sm" onClick={handleRevise} disabled={busy}>
@@ -290,8 +299,15 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
                   <Button variant="outline" size="sm" onClick={() => setIsEditing(false)} disabled={busy}>
                     Cancel
                   </Button>
-                  <Button size="sm" onClick={handleSaveDraft} disabled={busy || !draftContent.trim()}>
-                    Save
+                  <Button size="sm" onClick={handleSaveDraft} disabled={busy || !draftContent.trim()} className="gap-2">
+                    {busy ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      "Save"
+                    )}
                   </Button>
                 </div>
               </div>
@@ -335,8 +351,17 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
                       onClick={handleApprove}
                       disabled={busy}
                     >
-                      <CheckCircle2 className="h-4 w-4" />
-                      Approve {PHASE_LABELS[phase]}
+                      {busy ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Approving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span>Approve {PHASE_LABELS[phase]}</span>
+                        </>
+                      )}
                     </Button>
                     <Button
                       variant="outline"
@@ -344,14 +369,30 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
                       onClick={handleRequestChanges}
                       disabled={busy}
                     >
-                      <MessageSquareWarning className="h-4 w-4" />
-                      Request Changes
+                      {busy ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Requesting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <MessageSquareWarning className="h-4 w-4" />
+                          <span>Request Changes</span>
+                        </>
+                      )}
                     </Button>
                   </div>
                 </>
               ) : (
-                <Button onClick={handleRequestApproval} disabled={busy}>
-                  Submit for Approval
+                <Button onClick={handleRequestApproval} disabled={busy} className="gap-2">
+                  {busy ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    "Submit for Approval"
+                  )}
                 </Button>
               )}
             </CardContent>

@@ -72,6 +72,7 @@ import {
   Unlink,
   MessageSquare,
   Zap,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import { Image } from "lucide-react";
@@ -1162,12 +1163,12 @@ export default function ProjectDetailPage({
 
         {/* ── Edit Project Dialog ── */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent className="sm:max-w-125">
+          <DialogContent className="sm:max-w-125 max-h-[90vh] flex flex-col overflow-hidden">
             <DialogHeader>
               <DialogTitle>Edit Project</DialogTitle>
               <DialogDescription>Update project details and settings</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-2">
+            <div className="overflow-y-auto pr-1 flex-1 space-y-4 py-2">
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium">Project Name</label>
                 <Input
@@ -1292,8 +1293,15 @@ export default function ProjectDetailPage({
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
-              <Button onClick={handleSaveEdit} disabled={editSaving}>
-                {editSaving ? "Saving…" : "Save Changes"}
+              <Button onClick={handleSaveEdit} disabled={editSaving} className="gap-2">
+                {editSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Saving…</span>
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1310,8 +1318,15 @@ export default function ProjectDetailPage({
             </DialogHeader>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
-              <Button variant="destructive" onClick={handleDeleteProject} disabled={deleting}>
-                {deleting ? "Deleting…" : "Delete Project"}
+              <Button variant="destructive" onClick={handleDeleteProject} disabled={deleting} className="gap-2">
+                {deleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Deleting…</span>
+                  </>
+                ) : (
+                  "Delete Project"
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
