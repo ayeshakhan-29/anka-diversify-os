@@ -107,7 +107,9 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
   ];
 
   // Core state
+  // Core state
   const [mode, setMode] = useState<Mode>("agent");
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>(getInitialMessages);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [input, setInput] = useState("");
@@ -173,20 +175,23 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
   const [prDescriptions, setPrDescriptions] = useState<Record<number, { title: string; description: string }>>({});
   const [generatingDescription, setGeneratingDescription] = useState<number | null>(null);
 
-  // Load chat history
+  // Load chat history and restore active session
   useEffect(() => {
     setHistoryLoading(true);
     aiClient
       .getProjectSessions(project.id)
-      .then(({ sessions }) => {
+      .then(async ({ sessions }) => {
         if (!sessions.length) return null;
-        return aiClient.getProjectSessionMessages(project.id, sessions[0].id);
+        const activeSess = sessions[0];
+        setSessionId(activeSess.id);
+        const data = await aiClient.getProjectSessionMessages(project.id, activeSess.id);
+        return data;
       })
       .then((data) => {
-        if (!data?.messages.length) return;
+        if (!data?.messages?.length) return;
         setMessages([
           getInitialMessages()[0],
-          ...data.messages.map((m) => ({
+          ...data.messages.map((m: any) => ({
             id: m.id,
             role: m.role as "user" | "assistant",
             content: m.content,
@@ -379,7 +384,8 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
       : text;
 
     try {
-      const result = await aiClient.runAgent(project.id, augmentedText, contextId);
+      const result = await aiClient.runAgent(project.id, augmentedText, sessionId || undefined);
+      if (result.sessionId) setSessionId(result.sessionId);
 
       if (result.needsClarification && result.question) {
         pendingAgentContextRef.current = { baseText: text, qaHistory, taskDriven };
@@ -836,6 +842,7 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
 
   const handleClear = () => {
     AIService.clearChatContext(contextId);
+    setSessionId(null);
     setMessages(getInitialMessages());
     setAgentResult(null);
     setPushResult(null);
