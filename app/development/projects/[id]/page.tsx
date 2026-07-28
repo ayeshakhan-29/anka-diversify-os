@@ -256,12 +256,14 @@ export default function ProjectDetailPage({
 
   // ── activities state ──
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [activeTab, setActiveTab] = useState(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem(`project-tab-${id}`) || "kanban";
-    }
-    return "kanban";
-  });
+  // Always starts as "kanban" so the client's first render matches the server's
+  // (sessionStorage doesn't exist during SSR) — the saved tab is restored right
+  // after mount instead, avoiding a hydration mismatch on whichever tab was last active.
+  const [activeTab, setActiveTab] = useState("kanban");
+  useEffect(() => {
+    const saved = sessionStorage.getItem(`project-tab-${id}`);
+    if (saved) setActiveTab(saved);
+  }, [id]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── agent → IDE bridge ──
