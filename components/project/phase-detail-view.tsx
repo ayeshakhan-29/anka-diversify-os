@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { renderToStaticMarkup } from "react-dom/server";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle2, MessageSquareWarning, FileText, History, Sparkles, Wand2, Coins } from "lucide-react";
+import { CheckCircle2, MessageSquareWarning, FileText, History, Sparkles, Wand2, Coins, Copy, Check, Download } from "lucide-react";
 import { projectApi } from "@/lib/project-api";
 import type { WorkflowPhase, ProjectPhaseState, PhaseArtifact, PhaseApproval, WorkflowRun } from "@/lib/types";
 
@@ -42,6 +44,9 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
   const [draftContent, setDraftContent] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [comment, setComment] = useState("");
+  const [briefDialogOpen, setBriefDialogOpen] = useState(false);
+  const [brief, setBrief] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const refresh = useCallback(async () => {
     const [states, phaseArtifacts, phaseApprovals, allRuns] = await Promise.all([
@@ -95,21 +100,73 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
   };
 
   const handleGenerateWithAI = async () => {
+    setBriefDialogOpen(false);
     setGenerating(true);
     try {
-      const { workflowRun } = await projectApi.runAutomatedPhase(projectId, phase);
+      const { workflowRun } = await projectApi.runAutomatedPhase(projectId, phase, brief.trim() || undefined);
       setLastRunCost(workflowRun.costUSD ?? null);
       setIsEditing(false);
+      setBrief("");
       await refresh();
     } finally {
       setGenerating(false);
     }
   };
 
+  const handleCopy = () => {
+    if (!latestArtifact) return;
+    navigator.clipboard.writeText(latestArtifact.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownloadPdf = () => {
+    if (!latestArtifact) return;
+    const bodyHtml = renderToStaticMarkup(<ReactMarkdown>{latestArtifact.content}</ReactMarkdown>);
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(`<!doctype html>
+<html>
+  <head>
+    <title>${latestArtifact.title}</title>
+    <meta charset="utf-8" />
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #1a1a1a; }
+      h1, h2, h3 { margin-top: 1.6em; }
+      pre { background: #f4f4f4; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; }
+      code { background: #f4f4f4; padding: 2px 4px; border-radius: 4px; font-size: 0.9em; }
+      pre code { background: none; padding: 0; }
+    </style>
+  </head>
+  <body>
+    <h1>${latestArtifact.title}</h1>
+    ${bodyHtml}
+  </body>
+</html>`);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
   const handleRequestApproval = async () => {
     setBusy(true);
     try {
       await projectApi.requestPhaseApproval(projectId, phase);
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Reopens an already-approved phase for editing. Nothing about approval is
+  // destructive here — the old approved artifact stays in history, and the
+  // coding agent only picks up whichever version is most recently marked
+  // approved, so this just starts a new round: draft/generate, then
+  // re-approve when ready.
+  const handleRevise = async () => {
+    setBusy(true);
+    try {
+      await projectApi.startPhase(projectId, phase);
       await refresh();
     } finally {
       setBusy(false);
@@ -181,15 +238,31 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
                   variant="outline"
                   size="sm"
                   className="gap-1.5"
-                  onClick={handleGenerateWithAI}
+                  onClick={() => setBriefDialogOpen(true)}
                   disabled={isApproved || generating}
                 >
                   <Wand2 className="h-3.5 w-3.5" />
                   {generating ? "Generating…" : "Generate with AI"}
                 </Button>
-                <Button variant="outline" size="sm" onClick={startEditing} disabled={isApproved || generating}>
-                  {latestArtifact ? "Edit / New Version" : "Draft Proposal"}
-                </Button>
+                {isApproved ? (
+                  <Button variant="outline" size="sm" onClick={handleRevise} disabled={busy}>
+                    Revise Approved Doc
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={startEditing} disabled={generating}>
+                    {latestArtifact ? "Edit / New Version" : "Draft Proposal"}
+                  </Button>
+                )}
+                {latestArtifact && (
+                  <>
+                    <Button variant="outline" size="icon" className="h-8 w-8" title="Copy to clipboard" onClick={handleCopy}>
+                      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    </Button>
+                    <Button variant="outline" size="icon" className="h-8 w-8" title="Download as PDF" onClick={handleDownloadPdf}>
+                      <Download className="h-3.5 w-3.5" />
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </CardHeader>
@@ -223,7 +296,7 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
                 </div>
               </div>
             ) : latestArtifact ? (
-              <div className="prose prose-sm dark:prose-invert max-w-none">
+              <div className="prose prose-sm dark:prose-invert max-w-none min-w-0 wrap-break-word [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_code]:wrap-break-word">
                 <ReactMarkdown>{latestArtifact.content}</ReactMarkdown>
               </div>
             ) : (
@@ -376,6 +449,32 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
           Draft proposals manually, or generate them with AI — both feed the same approval flow.
         </p>
       </div>
+
+      <Dialog open={briefDialogOpen} onOpenChange={setBriefDialogOpen}>
+        <DialogContent className="sm:max-w-125">
+          <DialogHeader>
+            <DialogTitle>Generate {PHASE_LABELS[phase]} with AI</DialogTitle>
+            <DialogDescription>
+              Optional — add any specifics you want reflected (target users, constraints, tech preferences, scope).
+              Without one, it drafts from the project name/description alone.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+            placeholder="e.g. This is a scientific calculator for engineering students — needs trig functions and a history log. Should be a Next.js + TypeScript app."
+            rows={5}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={handleGenerateWithAI} disabled={generating}>
+              Skip — generate from project info only
+            </Button>
+            <Button onClick={handleGenerateWithAI} disabled={generating}>
+              Generate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

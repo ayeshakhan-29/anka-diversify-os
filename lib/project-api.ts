@@ -768,10 +768,11 @@ export const projectApi = {
     return artifact;
   },
 
-  async runAutomatedPhase(projectId: string, phase: WorkflowPhase): Promise<{ artifact: PhaseArtifact; workflowRun: WorkflowRun }> {
+  async runAutomatedPhase(projectId: string, phase: WorkflowPhase, brief?: string): Promise<{ artifact: PhaseArtifact; workflowRun: WorkflowRun }> {
     const res = await fetch(`${BASE_URL}/projects/${projectId}/phases/${phase}/run`, {
       method: "POST",
       headers: getHeaders(),
+      body: JSON.stringify({ brief }),
     });
     if (!res.ok) throw new Error(`POST run automated phase failed: ${res.status}`);
     const { data } = await res.json();
