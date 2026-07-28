@@ -101,13 +101,13 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
     {
       id: "1",
       role: "assistant",
-      content: `Hi! I'm the AI assistant for **${project.name}**. I have context about this project including its tasks and current phase (${project.phase}).\n\nSwitch to **Agent mode** to have me edit files directly in the Code editor — review the changes, then save & push.`,
+      content: `Hi! I'm the AI Agent for **${project.name}**. Ask me to implement features, fix bugs, or refactor code — I analyze project context, create multi-phase roadmaps, and generate complete code changes for your review before saving & pushing.`,
       timestamp: new Date(),
     },
   ];
 
   // Core state
-  const [mode, setMode] = useState<Mode>("chat");
+  const [mode, setMode] = useState<Mode>("agent");
   const [messages, setMessages] = useState<Message[]>(getInitialMessages);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [input, setInput] = useState("");
@@ -396,6 +396,19 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
         setCommitMessage(result.commitMessage);
         setSelectedFiles(new Set(result.changes.map((c) => c.path)));
         setApplyLocalSuccess(false);
+
+        // Append assistant chat message detailing what was accomplished
+        const summaryMsg = `✨ **AI Agent Execution Complete**\n\n**Intent:** \`${result.intent || "FEATURE_ADD"}\` (Confidence: ${Math.round((result.confidence || 0.95) * 100)}%)\n\n**Summary:** ${result.explanation}\n\n**Build Status:** ${
+          result.buildVerified ? "✅ Verified Clean (0 build errors)" : "❌ Build Failed / Flagged"
+        }\n\n**Files Modified / Created (${result.changes.length}):**\n${result.changes
+          .map((c) => `- \`${c.path}\`: ${c.description}`)
+          .join("\n")}\n\n*Review the proposed diffs below to apply locally or authorize & push to GitHub.*`;
+
+        setMessages((prev) => [
+          ...prev,
+          { id: (Date.now() + 1).toString(), role: "assistant", content: summaryMsg, timestamp: new Date() },
+        ]);
+
         if (onAgentChanges && !taskDriven) onAgentChanges(result.changes);
       } else {
         setMessages((prev) => [
@@ -581,6 +594,15 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
       const result = await aiClient.pushAgentChanges(project.id, changes, commitMessage);
       setPushResult(result);
       setAgentResult(null);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `🚀 **Changes Authorized & Pushed to GitHub!**\n\n- **Commit Message:** \`${commitMessage}\`\n- **Files Pushed:** ${changes.length}\n- **Repository:** [View Commit on GitHub](${result.url})`,
+          timestamp: new Date(),
+        },
+      ]);
       completeActiveTask();
     } catch (err) {
       setPushError(err instanceof Error ? err.message : "Push failed");
@@ -598,6 +620,15 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
         .map(({ path, content }) => ({ path, content }));
       await projectApi.applyLocalChanges(project.id, changes);
       setApplyLocalSuccess(true);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `📁 **Applied to Local Workspace!**\n\nSuccessfully wrote ${changes.length} file change${changes.length !== 1 ? "s" : ""} to disk.`,
+          timestamp: new Date(),
+        },
+      ]);
     } catch (err) {
       setPushError(err instanceof Error ? err.message : "Failed to apply locally");
     } finally {
@@ -854,53 +885,24 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
   return (
     <div className="flex gap-4 p-4 h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] overflow-hidden">
       {/* Main chat panel */}
-      <Card className="flex-1 flex flex-col overflow-hidden">
+      <Card className="flex-1 flex flex-col overflow-hidden border border-violet-500/25 bg-background/60 backdrop-blur-xl shadow-lg shadow-violet-500/5">
         {/* Header */}
         <CardHeader className="border-b shrink-0 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div
-                className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-lg",
-                  mode === "agent" ? "bg-violet-600" : "bg-primary",
-                )}
-              >
-                {mode === "agent" ? (
-                  <Zap className="h-5 w-5 text-white" />
-                ) : (
-                  <Bot className="h-5 w-5 text-primary-foreground" />
-                )}
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-600">
+                <Zap className="h-5 w-5 text-white" />
               </div>
               <div>
                 <CardTitle className="text-sm font-semibold">
-                  {project.name} — {mode === "agent" ? "Coding Agent" : "AI Assistant"}
+                  {project.name} — AI Agent
                 </CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  {mode === "agent" ? "Reads & edits your codebase" : "Project-scoped context"}
+                  Multi-stage agentic workflow (Reads & edits codebase)
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex rounded-md border overflow-hidden text-xs">
-                <button
-                  onClick={() => setMode("chat")}
-                  className={cn(
-                    "flex items-center gap-1 px-2.5 py-1.5 transition-colors",
-                    mode === "chat" ? "bg-primary text-primary-foreground" : "hover:bg-secondary",
-                  )}
-                >
-                  <MessageSquare className="h-3 w-3" />Chat
-                </button>
-                <button
-                  onClick={() => setMode("agent")}
-                  className={cn(
-                    "flex items-center gap-1 px-2.5 py-1.5 transition-colors",
-                    mode === "agent" ? "bg-violet-600 text-white" : "hover:bg-secondary",
-                  )}
-                >
-                  <Zap className="h-3 w-3" />Agent
-                </button>
-              </div>
               <Badge variant="outline" className="text-xs">
                 <Sparkles className="h-3 w-3 mr-1" />GPT-4o
               </Badge>

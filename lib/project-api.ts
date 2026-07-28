@@ -460,9 +460,9 @@ export const projectApi = {
 
   async getChatMessages(projectId: string): Promise<ProjectChatMessage[]> {
     const res = await fetch(`${BASE_URL}/projects/${projectId}/chat`, { headers: getHeaders() });
-    if (!res.ok) throw new Error(`GET chat failed: ${res.status}`);
+    if (!res.ok) return [];
     const { data } = await res.json();
-    return data as ProjectChatMessage[];
+    return (data as ProjectChatMessage[]) ?? [];
   },
 
   async sendChatMessage(projectId: string, content: string): Promise<ProjectChatMessage> {

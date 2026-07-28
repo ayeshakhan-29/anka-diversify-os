@@ -44,6 +44,7 @@ import { projectApi } from "@/lib/project-api";
 import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember, WorkflowPhase, ProjectPhaseState } from "@/lib/types";
 import { inviteApi } from "@/lib/invite-api";
 import type { TeamUser } from "@/lib/invite-api";
+import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
   Plus,
@@ -73,6 +74,12 @@ import {
   MessageSquare,
   Zap,
   Loader2,
+  Kanban,
+  Layers,
+  FolderOpen,
+  Code,
+  Activity as ActivityIcon,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { Image } from "lucide-react";
@@ -272,7 +279,6 @@ export default function ProjectDetailPage({
 
   const handleAgentChanges = (changes: { path: string; content: string; description: string }[]) => {
     setPendingAgentChanges(changes);
-    setActiveTab("code");
   };
 
   // "Run Agent" clicked on a Kanban card — jump to the AI tab and have the
@@ -723,27 +729,41 @@ export default function ProjectDetailPage({
 
           {/* ── Tabs ── */}
           <Tabs value={activeTab} className="w-full" onValueChange={(v) => { setActiveTab(v); sessionStorage.setItem(`project-tab-${id}`, v); if (v === "activity") refreshActivities(); if (v === "workflow") refreshPhaseStates(); }}>
-            <div className="px-4 border-t overflow-x-auto">
-              <TabsList className="h-12 bg-transparent gap-2 sm:gap-4 -mb-px w-max sm:w-full">
-                {["kanban", "workflow", "files", "code", "chat", "activity", "ai-assistant"].map((tab) => (
+            <div className="px-4 border-t bg-card/30 backdrop-blur-md overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              <TabsList className="h-12 bg-transparent gap-1.5 sm:gap-2 w-max sm:w-full justify-start py-1">
+                {[
+                  { id: "kanban", label: "Kanban Board", icon: Kanban },
+                  { id: "workflow", label: "Workflow", icon: Layers },
+                  { id: "files", label: "Files", icon: FolderOpen },
+                  { id: "code", label: "Code", icon: Code },
+                  { id: "chat", label: "Chat", icon: MessageSquare },
+                  { id: "activity", label: "Activity", icon: ActivityIcon },
+                  { id: "ai-assistant", label: "AI Agent", icon: Zap, badge: "Multi-Stage" },
+                ].map(({ id: tabId, label, icon: Icon, badge }) => (
                   <TabsTrigger
-                    key={tab}
-                    value={tab}
-                    className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent capitalize whitespace-nowrap text-xs sm:text-sm"
+                    key={tabId}
+                    value={tabId}
+                    className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:border-primary/40 data-[state=active]:shadow-sm rounded-lg border border-transparent px-3 py-1.5 transition-all text-xs font-medium flex items-center gap-1.5 whitespace-nowrap hover:bg-secondary/40"
                   >
-                    {tab === "kanban" ? "Kanban Board"
-                      : tab === "workflow" ? "Workflow"
-                        : tab === "files" ? "Files"
-                          : tab === "code" ? "Code"
-                            : tab === "ai-assistant" ? "AI"
-                              : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    <Icon className={cn("h-3.5 w-3.5 shrink-0", tabId === "ai-assistant" ? "text-violet-400" : "")} />
+                    <span>{label}</span>
+                    {badge && (
+                      <span className="ml-1 text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                        {badge}
+                      </span>
+                    )}
                   </TabsTrigger>
                 ))}
               </TabsList>
             </div>
 
-            {/* ── Workflow ── */}
-            <TabsContent value="workflow" className="mt-0 flex-1">
+            {/* ── Workflow ── forceMount keeps workflow state & artifacts loaded without tab blink */}
+            <TabsContent
+              value="workflow"
+              className="mt-0 flex-1"
+              forceMount
+              style={activeTab !== "workflow" ? { display: "none" } : undefined}
+            >
               <PhaseStepper states={phaseStates} activePhase={workflowPhase} onSelectPhase={setWorkflowPhase} />
               <PhaseDetailView projectId={id} phase={workflowPhase} onStatesChange={setPhaseStates} />
             </TabsContent>

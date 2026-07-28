@@ -276,6 +276,13 @@ class AIClient {
     needsClarification?: boolean;
     question?: string;
     options?: string[];
+    intent?: "BUG_FIX" | "FEATURE_ADD" | "REFACTOR" | "DOCS" | "OPTIMIZATION";
+    confidence?: number;
+    roadmap?: { phase: number; title: string; layer?: string; targetFiles: string[]; description: string }[];
+    securityPass?: boolean;
+    critiqueScore?: number;
+    buildVerified?: boolean;
+    buildErrors?: string;
   }> {
     const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/agent/run`, {
       method: "POST",

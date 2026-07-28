@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -48,26 +48,41 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
   const [brief, setBrief] = useState("");
   const [copied, setCopied] = useState(false);
 
+  const onStatesChangeRef = useRef(onStatesChange);
+  useEffect(() => {
+    onStatesChangeRef.current = onStatesChange;
+  }, [onStatesChange]);
+
   const refresh = useCallback(async () => {
-    const [states, phaseArtifacts, phaseApprovals, allRuns] = await Promise.all([
-      projectApi.getPhaseStates(projectId),
-      projectApi.getPhaseArtifacts(projectId, phase),
-      projectApi.getPhaseApprovals(projectId, phase),
-      projectApi.getWorkflowRuns(projectId),
-    ]);
-    setPhaseState(states.find((s) => s.phase === phase) || null);
-    setArtifacts(phaseArtifacts);
-    setApprovals(phaseApprovals);
-    setRuns(allRuns.filter((r) => r.currentPhase === phase));
-    onStatesChange?.(states);
-  }, [projectId, phase, onStatesChange]);
+    try {
+      const [states, phaseArtifacts, phaseApprovals, allRuns] = await Promise.all([
+        projectApi.getPhaseStates(projectId),
+        projectApi.getPhaseArtifacts(projectId, phase),
+        projectApi.getPhaseApprovals(projectId, phase),
+        projectApi.getWorkflowRuns(projectId),
+      ]);
+      setPhaseState(states.find((s) => s.phase === phase) || null);
+      setArtifacts(phaseArtifacts);
+      setApprovals(phaseApprovals);
+      setRuns(allRuns.filter((r) => r.currentPhase === phase));
+      onStatesChangeRef.current?.(states);
+    } catch {
+      // silent catch for background revalidation
+    }
+  }, [projectId, phase]);
 
   useEffect(() => {
-    setLoading(true);
-    refresh().finally(() => setLoading(false));
+    let isMounted = true;
+    if (artifacts.length === 0) {
+      setLoading(true);
+    }
+    refresh().finally(() => {
+      if (isMounted) setLoading(false);
+    });
     setIsEditing(false);
     setComment("");
-  }, [refresh]);
+    return () => { isMounted = false; };
+  }, [projectId, phase, refresh]);
 
   const latestArtifact = artifacts[0];
   const status = phaseState?.status || "not_started";
@@ -522,11 +537,11 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
-    not_started: { label: "Not Started", className: "text-muted-foreground border-muted-foreground/30" },
-    in_progress: { label: "In Progress", className: "text-primary border-primary" },
-    awaiting_approval: { label: "Awaiting Approval", className: "text-warning border-warning" },
-    approved: { label: "Approved", className: "text-success border-success" },
-    completed: { label: "Completed", className: "text-success border-success" },
+    not_started: { label: "Not Started", className: "text-muted-foreground border-muted-foreground/30 bg-secondary/30" },
+    in_progress: { label: "In Progress", className: "text-primary border-primary/40 bg-primary/10" },
+    awaiting_approval: { label: "Awaiting Approval", className: "text-amber-400 border-amber-500/40 bg-amber-500/10" },
+    approved: { label: "Approved", className: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10" },
+    completed: { label: "Completed", className: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10" },
   };
   const s = map[status] || map.not_started;
   return <Badge variant="outline" className={s.className}>{s.label}</Badge>;

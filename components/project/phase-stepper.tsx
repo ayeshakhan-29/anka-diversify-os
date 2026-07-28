@@ -15,10 +15,10 @@ const PHASE_LABELS: Record<WorkflowPhase, string> = {
 
 const STATUS_STYLES: Record<WorkflowPhaseStatus, { icon: typeof Circle; className: string; label: string }> = {
   not_started: { icon: Circle, className: "text-muted-foreground border-muted-foreground/30", label: "Not Started" },
-  in_progress: { icon: Clock, className: "text-primary border-primary", label: "In Progress" },
-  awaiting_approval: { icon: AlertCircle, className: "text-warning border-warning", label: "Awaiting Approval" },
-  approved: { icon: CheckCircle2, className: "text-success border-success", label: "Approved" },
-  completed: { icon: CheckCircle2, className: "text-success border-success", label: "Completed" },
+  in_progress: { icon: Clock, className: "text-primary border-primary bg-primary/10", label: "In Progress" },
+  awaiting_approval: { icon: AlertCircle, className: "text-amber-400 border-amber-500/40 bg-amber-500/10", label: "Awaiting Approval" },
+  approved: { icon: CheckCircle2, className: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10", label: "Approved" },
+  completed: { icon: CheckCircle2, className: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10", label: "Completed" },
 };
 
 interface PhaseStepperProps {
@@ -31,7 +31,7 @@ export function PhaseStepper({ states, activePhase, onSelectPhase }: PhaseSteppe
   const statusByPhase = new Map(states.map((s) => [s.phase, s.status]));
 
   return (
-    <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto px-4 py-3 border-t bg-secondary/20">
+    <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-4 py-3 border-t bg-card/30 backdrop-blur-md">
       {WORKFLOW_PHASES.map((phase, i) => {
         const status = statusByPhase.get(phase) || "not_started";
         const style = STATUS_STYLES[status];
