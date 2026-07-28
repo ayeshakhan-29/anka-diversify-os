@@ -71,6 +71,7 @@ import {
   GitMerge,
   Unlink,
   MessageSquare,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { Image } from "lucide-react";
@@ -269,6 +270,21 @@ export default function ProjectDetailPage({
   const handleAgentChanges = (changes: { path: string; content: string; description: string }[]) => {
     setPendingAgentChanges(changes);
     setActiveTab("code");
+  };
+
+  // "Run Agent" clicked on a Kanban card — jump to the AI tab and have the
+  // agent implement that specific task, full description included.
+  const [agentTaskRequest, setAgentTaskRequest] = useState<{ taskId: string; title: string; description?: string } | null>(null);
+  const handleRunAgentOnTask = (task: Task) => {
+    setAgentTaskRequest({ taskId: task.id, title: task.title, description: task.description });
+    setActiveTab("ai-assistant");
+  };
+
+  // Marks a task done after the agent's batch run for it has been pushed —
+  // unblocks any tasks that were waiting on it.
+  const handleTaskCompletedByAgent = (taskId: string) => {
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: "done" } : t)));
+    projectApi.updateTask(id, taskId, { status: "done" }).catch(() => { });
   };
 
   const refreshActivities = useCallback(() => {
@@ -855,6 +871,17 @@ export default function ProjectDetailPage({
                                       </p>
                                     )}
                                   </div>
+                                  {/* Run Agent on this task */}
+                                  <button
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-primary"
+                                    title="Run Agent on this task"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRunAgentOnTask(task);
+                                    }}
+                                  >
+                                    <Zap className="h-3.5 w-3.5" />
+                                  </button>
                                   {/* Delete task button */}
                                   <button
                                     className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
@@ -1119,7 +1146,14 @@ export default function ProjectDetailPage({
 
             {/* ── AI Assistant ── */}
             <TabsContent value="ai-assistant" className="mt-0 flex-1">
-              <ProjectAIAssistant project={project} onAgentChanges={handleAgentChanges} />
+              <ProjectAIAssistant
+                project={project}
+                tasks={tasks}
+                onAgentChanges={handleAgentChanges}
+                runTaskRequest={agentTaskRequest}
+                onRunTaskConsumed={() => setAgentTaskRequest(null)}
+                onTaskCompleted={handleTaskCompletedByAgent}
+              />
             </TabsContent>
           </Tabs>
         </div>

@@ -273,12 +273,26 @@ class AIClient {
     changes: { path: string; content: string; description: string }[];
     commitMessage: string;
     sessionId: string;
+    needsClarification?: boolean;
+    question?: string;
+    options?: string[];
   }> {
     const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/agent/run`, {
       method: "POST",
       body: JSON.stringify({ message, sessionId }),
     });
     return res.data;
+  }
+
+  async suggestTaskOrder(
+    projectId: string,
+    tasks: { id: string; title: string; description?: string }[],
+  ): Promise<string[]> {
+    const res = await this.request<{ success: boolean; data: { order: string[] } }>(
+      `/projects/${projectId}/tasks/suggest-order`,
+      { method: "POST", body: JSON.stringify({ tasks }) },
+    );
+    return res.data.order;
   }
 
   async generateSprint(

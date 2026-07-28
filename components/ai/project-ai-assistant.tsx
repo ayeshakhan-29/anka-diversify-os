@@ -5,14 +5,15 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Bot, RotateCcw, Sparkles, Zap, MessageSquare, Loader2, Check, ExternalLink, FileText, X } from "lucide-react";
+import { Bot, RotateCcw, Sparkles, Zap, MessageSquare, Loader2, Check, ExternalLink, FileText, X, ListChecks, HelpCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { AIService, type ProposedTask, type EpicProposal, type ProjectHealth, type AttachedFile } from "@/lib/ai-service";
 import { projectApi } from "@/lib/project-api";
 import { aiClient, type PullRequest, type PRReview } from "@/lib/ai-client";
-import type { Project } from "@/lib/types";
+import type { Project, Task } from "@/lib/types";
 
 import type { Message, AgentResult } from "./types";
 import { ChatMessage } from "./chat-message";
@@ -26,12 +27,73 @@ import { ChatInput } from "./chat-input";
 
 type Mode = "chat" | "agent";
 
-interface ProjectAIAssistantProps {
-  project: Project;
-  onAgentChanges?: (changes: { path: string; content: string; description: string }[]) => void;
+interface RunTaskRequest {
+  taskId: string;
+  title: string;
+  description?: string;
 }
 
-export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssistantProps) {
+interface QaTurn {
+  question: string;
+  answer: string;
+}
+
+// Orders not-done tasks so each task's blockers (blockedByIds) come before it.
+// Tasks that become ready in the same wave (no dependency relationship between
+// them) have no inherent order — rather than guessing from array order, the AI
+// sequences each wave logically (foundational work before polish/testing).
+// Tasks with unresolvable/circular blockers are appended at the end.
+async function computeReadyOrder(
+  tasks: Task[],
+  suggestOrder: (wave: Task[]) => Promise<string[]>,
+): Promise<Task[]> {
+  const doneIds = new Set(tasks.filter((t) => t.status === "done").map((t) => t.id));
+  const remaining = new Map(tasks.filter((t) => t.status !== "done").map((t) => [t.id, t]));
+  const order: Task[] = [];
+
+  while (remaining.size > 0) {
+    const wave = Array.from(remaining.values()).filter((task) => {
+      const blockers = task.blockedByIds || [];
+      return blockers.every((id) => doneIds.has(id) || !remaining.has(id));
+    });
+    if (wave.length === 0) break; // circular/unresolvable — leftovers appended below
+
+    let waveOrdered = wave;
+    if (wave.length > 1) {
+      try {
+        const ids = await suggestOrder(wave);
+        const byId = new Map(wave.map((t) => [t.id, t]));
+        waveOrdered = ids.map((id) => byId.get(id)).filter((t): t is Task => !!t);
+        for (const t of wave) if (!waveOrdered.includes(t)) waveOrdered.push(t);
+      } catch {
+        // fall back to array order for this wave
+      }
+    }
+
+    for (const t of waveOrdered) {
+      order.push(t);
+      doneIds.add(t.id);
+      remaining.delete(t.id);
+    }
+  }
+  order.push(...remaining.values());
+  return order;
+}
+
+function taskPrompt(task: { title: string; description?: string }): string {
+  return `Implement this task:\n\nTitle: ${task.title}${task.description ? `\nDescription: ${task.description}` : ""}`;
+}
+
+interface ProjectAIAssistantProps {
+  project: Project;
+  tasks?: Task[];
+  onAgentChanges?: (changes: { path: string; content: string; description: string }[]) => void;
+  runTaskRequest?: RunTaskRequest | null;
+  onRunTaskConsumed?: () => void;
+  onTaskCompleted?: (taskId: string) => void;
+}
+
+export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTaskRequest, onRunTaskConsumed, onTaskCompleted }: ProjectAIAssistantProps) {
   const contextId = `project-${project.id}`;
   const AGENT_STORAGE_KEY = `agent-pending-${project.id}`;
 
@@ -71,6 +133,16 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [isApplyingLocal, setIsApplyingLocal] = useState(false);
   const [applyLocalSuccess, setApplyLocalSuccess] = useState(false);
+
+  // Batch task runner
+  const [batchQueue, setBatchQueue] = useState<Task[]>([]);
+  const [batchActive, setBatchActive] = useState(false);
+  const [activeAgentTaskId, setActiveAgentTaskId] = useState<string | null>(null);
+  const [clarification, setClarification] = useState<{ question: string; options?: string[] } | null>(null);
+  const [clarificationAnswer, setClarificationAnswer] = useState("");
+  const pendingAgentContextRef = useRef<{ baseText: string; qaHistory: QaTurn[]; taskDriven: boolean } | null>(null);
+  const [batchTotal, setBatchTotal] = useState(0);
+  const [currentBatchTaskTitle, setCurrentBatchTaskTitle] = useState<string | null>(null);
 
   // Task proposals
   const [proposedTasks, setProposedTasks] = useState<ProposedTask[] | null>(null);
@@ -148,6 +220,80 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
     }
   }, [agentResult, AGENT_STORAGE_KEY]);
 
+  // Batch runner state must survive this component unmounting — switching to
+  // another tab (Kanban, Workflow, etc.) unmounts inactive TabsContent by
+  // default, which would otherwise silently kill an in-progress batch after
+  // just one task, leaving only the last diff (already persisted above) with
+  // nothing to continue it.
+  const BATCH_STORAGE_KEY = `agent-batch-${project.id}`;
+  const batchRestoredRef = useRef(false);
+
+  useEffect(() => {
+    if (batchRestoredRef.current || tasks.length === 0) return;
+    batchRestoredRef.current = true;
+    try {
+      const saved = localStorage.getItem(BATCH_STORAGE_KEY);
+      if (!saved) return;
+      const parsed: {
+        batchActive: boolean;
+        queueIds: string[];
+        activeAgentTaskId: string | null;
+        batchTotal: number;
+        clarification: { question: string; options?: string[] } | null;
+        pendingContext: { baseText: string; qaHistory: QaTurn[]; taskDriven: boolean } | null;
+      } = JSON.parse(saved);
+      if (!parsed.batchActive) return;
+
+      const byId = new Map(tasks.map((t) => [t.id, t]));
+      const restoredQueue = parsed.queueIds
+        .map((id) => byId.get(id))
+        .filter((t): t is Task => !!t && t.status !== "done");
+      const activeTask = parsed.activeAgentTaskId ? byId.get(parsed.activeAgentTaskId) : undefined;
+
+      setMode("agent");
+      setBatchActive(true);
+      setBatchQueue(restoredQueue);
+      setBatchTotal(parsed.batchTotal || restoredQueue.length + 1);
+      setActiveAgentTaskId(parsed.activeAgentTaskId);
+      setCurrentBatchTaskTitle(activeTask?.title || null);
+
+      // A pending clarification question takes priority — restore it as-is
+      // and wait for the answer rather than silently re-running the task
+      // (which was corrupting batch progress: the old run's answer would
+      // still land on a fresh, unrelated re-run of the same task).
+      if (parsed.clarification && parsed.pendingContext) {
+        setClarification(parsed.clarification);
+        pendingAgentContextRef.current = parsed.pendingContext;
+        return;
+      }
+
+      // Otherwise, if a run was genuinely in flight (no diff, no question)
+      // when this unmounted, that task's result was lost — re-run it rather
+      // than leaving the batch stuck with nothing happening.
+      const hasPendingDiff = !!localStorage.getItem(AGENT_STORAGE_KEY);
+      if (activeTask && !hasPendingDiff) {
+        runBatchTask(activeTask);
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks]);
+
+  // Persist in-progress batch so it survives switching tabs
+  useEffect(() => {
+    if (batchActive) {
+      localStorage.setItem(BATCH_STORAGE_KEY, JSON.stringify({
+        batchActive: true,
+        queueIds: batchQueue.map((t) => t.id),
+        activeAgentTaskId,
+        batchTotal,
+        clarification,
+        pendingContext: pendingAgentContextRef.current,
+      }));
+    } else {
+      localStorage.removeItem(BATCH_STORAGE_KEY);
+    }
+  }, [batchActive, batchQueue, activeAgentTaskId, batchTotal, clarification, BATCH_STORAGE_KEY]);
+
   useEffect(() => {
     projectApi.getRepoSnapshot(project.id).then((snap) => {
       if (snap) setRepoSnapshot(snap);
@@ -205,23 +351,180 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
     }
   };
 
+  // Runs one agent turn. qaHistory carries any clarification Q&A already
+  // resolved for this task, appended to the prompt so the agent can continue
+  // instead of re-asking. Only the very first turn (empty qaHistory) posts a
+  // "[Agent] ..." user bubble — resumed turns just show the user's answer.
+  // taskDriven runs (single "Run Agent on this task" or batch) stay entirely
+  // in this AI tab for review/push — they skip the old auto-jump-to-Code-tab
+  // behavior, which is only useful for freeform typed agent requests and
+  // actively breaks the batch flow (it unmounts this panel and pushes via a
+  // separate, untracked path in the Code tab).
+  const runAgentTurn = async (text: string, qaHistory: QaTurn[] = [], taskDriven = false) => {
+    setIsLoading(true);
+    setAgentResult(null);
+    setPushResult(null);
+    setPushError(null);
+    setClarification(null);
+
+    if (qaHistory.length === 0) {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), role: "user", content: `[Agent] ${text}`, timestamp: new Date() },
+      ]);
+    }
+
+    const augmentedText = qaHistory.length
+      ? `${text}\n\nCLARIFICATION SO FAR:\n${qaHistory.map((qa) => `Q: ${qa.question}\nA: ${qa.answer}`).join("\n")}`
+      : text;
+
+    try {
+      const result = await aiClient.runAgent(project.id, augmentedText, contextId);
+
+      if (result.needsClarification && result.question) {
+        pendingAgentContextRef.current = { baseText: text, qaHistory, taskDriven };
+        setClarification({ question: result.question, options: result.options });
+        setMessages((prev) => [
+          ...prev,
+          { id: (Date.now() + 1).toString(), role: "assistant", content: `❓ ${result.question}`, timestamp: new Date() },
+        ]);
+        return;
+      }
+
+      if (result.changes.length > 0) {
+        setAgentResult(result);
+        setCommitMessage(result.commitMessage);
+        setSelectedFiles(new Set(result.changes.map((c) => c.path)));
+        setApplyLocalSuccess(false);
+        if (onAgentChanges && !taskDriven) onAgentChanges(result.changes);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { id: (Date.now() + 1).toString(), role: "assistant", content: result.explanation || "No changes were needed.", timestamp: new Date() },
+        ]);
+        advanceBatch();
+      }
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { id: (Date.now() + 1).toString(), role: "assistant", content: `Agent error: ${err instanceof Error ? err.message : "Unknown error"}`, timestamp: new Date() },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAnswerClarification = (answer: string) => {
+    if (!clarification || !pendingAgentContextRef.current) return;
+    const qa: QaTurn = { question: clarification.question, answer };
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now().toString(), role: "user", content: answer, timestamp: new Date() },
+    ]);
+    setClarificationAnswer("");
+    const { baseText, qaHistory, taskDriven } = pendingAgentContextRef.current;
+    runAgentTurn(baseText, [...qaHistory, qa], taskDriven);
+  };
+
+  const runBatchTask = (task: Task) => {
+    setActiveAgentTaskId(task.id);
+    setCurrentBatchTaskTitle(task.title);
+    runAgentTurn(taskPrompt(task), [], true);
+  };
+
+  const startBatch = async () => {
+    const notDone = tasks.filter((t) => t.status !== "done");
+    if (notDone.length === 0) {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), role: "assistant", content: "No pending tasks to run — everything is done.", timestamp: new Date() },
+      ]);
+      return;
+    }
+    setMode("agent");
+    setIsLoading(true);
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now().toString(), role: "assistant", content: "📋 Planning task order for the batch run...", timestamp: new Date() },
+    ]);
+    const order = await computeReadyOrder(tasks, (wave) =>
+      aiClient.suggestTaskOrder(project.id, wave.map((t) => ({ id: t.id, title: t.title, description: t.description }))),
+    );
+    setIsLoading(false);
+    if (order.length === 0) {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), role: "assistant", content: "No ready tasks — remaining tasks are blocked by unfinished dependencies.", timestamp: new Date() },
+      ]);
+      return;
+    }
+    setBatchActive(true);
+    setBatchTotal(order.length);
+    const [first, ...rest] = order;
+    setBatchQueue(rest);
+    runBatchTask(first);
+  };
+
+  // Called after a task's changes are pushed, or when the agent decides a
+  // task needs no changes. Marks the task done, re-syncs the repo snapshot so
+  // the next task's agent call sees what was just pushed instead of a stale
+  // pre-push file tree (which was causing it to reinvent files it couldn't
+  // see), then — if a batch is running — moves on to the next ready task.
+  const completeActiveTask = async () => {
+    if (activeAgentTaskId) {
+      onTaskCompleted?.(activeAgentTaskId);
+      setActiveAgentTaskId(null);
+    }
+    if (!batchActive) return;
+
+    if (project.githubUrl) {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), role: "assistant", content: "🔄 Syncing repo before the next task...", timestamp: new Date() },
+      ]);
+      try {
+        await projectApi.syncGithub(project.id, project.githubUrl);
+        const snap = await projectApi.getRepoSnapshot(project.id);
+        if (snap) setRepoSnapshot(snap);
+      } catch {
+        // proceed anyway — better to continue with a stale snapshot than block the batch
+      }
+    }
+
+    if (batchQueue.length === 0) {
+      setBatchActive(false);
+      setCurrentBatchTaskTitle(null);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), role: "assistant", content: "✅ Batch complete — no more ready tasks.", timestamp: new Date() },
+      ]);
+      return;
+    }
+    const [next, ...rest] = batchQueue;
+    setBatchQueue(rest);
+    runBatchTask(next);
+  };
+
+  const advanceBatch = () => {
+    if (!batchActive && !activeAgentTaskId) return;
+    completeActiveTask();
+  };
+
   const handleSend = async () => {
     if ((!input.trim() && !attachedFiles.length) || isLoading) return;
     const text = input.trim();
     const files = attachedFiles;
     setInput("");
     setAttachedFiles([]);
-    setIsLoading(true);
-    setAgentResult(null);
-    setPushResult(null);
-    setPushError(null);
     setProposedTasks(null);
     setProposedEpic(null);
 
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: mode === "agent" ? `[Agent] ${text}` : text, timestamp: new Date() };
-    setMessages((prev) => [...prev, userMsg]);
-
     if (mode === "chat") {
+      setIsLoading(true);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), role: "user", content: text, timestamp: new Date() },
+      ]);
       const controller = new AbortController();
       abortControllerRef.current = controller;
       try {
@@ -231,25 +534,24 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
         setIsLoading(false);
       }
     } else {
-      try {
-        const result = await aiClient.runAgent(project.id, text, contextId);
-        if (result.changes.length > 0) {
-          setAgentResult(result);
-          setCommitMessage(result.commitMessage);
-          setSelectedFiles(new Set(result.changes.map((c) => c.path)));
-          setApplyLocalSuccess(false);
-          if (onAgentChanges) onAgentChanges(result.changes);
-        }
-      } catch (err) {
-        setMessages((prev) => [
-          ...prev,
-          { id: (Date.now() + 1).toString(), role: "assistant", content: `Agent error: ${err instanceof Error ? err.message : "Unknown error"}`, timestamp: new Date() },
-        ]);
-      } finally {
-        setIsLoading(false);
-      }
+      // Freeform agent message typed by the user — not tied to a specific task.
+      setActiveAgentTaskId(null);
+      setCurrentBatchTaskTitle(null);
+      await runAgentTurn(text);
     }
   };
+
+  // "Run Agent" clicked on a Kanban task card — switch to Agent mode and
+  // immediately run it with the task's full title + description, so the
+  // agent isn't limited to the bare title it'd otherwise see in its context.
+  useEffect(() => {
+    if (!runTaskRequest) return;
+    setMode("agent");
+    setActiveAgentTaskId(runTaskRequest.taskId);
+    setCurrentBatchTaskTitle(runTaskRequest.title);
+    runAgentTurn(taskPrompt(runTaskRequest), [], true).finally(() => onRunTaskConsumed?.());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runTaskRequest]);
 
   const handleQuickAction = async (prompt: string) => {
     if (isLoading) return;
@@ -279,6 +581,7 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
       const result = await aiClient.pushAgentChanges(project.id, changes, commitMessage);
       setPushResult(result);
       setAgentResult(null);
+      completeActiveTask();
     } catch (err) {
       setPushError(err instanceof Error ? err.message : "Push failed");
     } finally {
@@ -507,6 +810,13 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
     setPushResult(null);
     setProposedTasks(null);
     setSelectedProposedTasks(new Set());
+    setBatchActive(false);
+    setBatchQueue([]);
+    setBatchTotal(0);
+    setCurrentBatchTaskTitle(null);
+    setActiveAgentTaskId(null);
+    setClarification(null);
+    pendingAgentContextRef.current = null;
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -592,8 +902,19 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
                 </button>
               </div>
               <Badge variant="outline" className="text-xs">
-                <Sparkles className="h-3 w-3 mr-1" />GPT-4
+                <Sparkles className="h-3 w-3 mr-1" />GPT-4o
               </Badge>
+              {batchActive ? (
+                <Badge variant="outline" className="text-xs gap-1 border-violet-500 text-violet-600 dark:text-violet-400">
+                  <ListChecks className="h-3 w-3" />
+                  Task {Math.min(batchTotal, Math.max(1, batchTotal - batchQueue.length))} of {batchTotal}
+                </Badge>
+              ) : (
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={startBatch} disabled={isLoading}>
+                  <ListChecks className="h-3.5 w-3.5" />
+                  Run Batch
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={handleClear}>
                 <RotateCcw className="h-4 w-4" />
               </Button>
@@ -633,7 +954,9 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
                   <span className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:0.4s]" />
                 </div>
                 {mode === "agent" && (
-                  <span className="text-xs text-muted-foreground ml-1">Analyzing codebase...</span>
+                  <span className="text-xs text-muted-foreground ml-1">
+                    {currentBatchTaskTitle ? `Working on: ${currentBatchTaskTitle}` : "Analyzing codebase..."}
+                  </span>
                 )}
               </div>
             </div>
@@ -657,6 +980,52 @@ export function ProjectAIAssistant({ project, onAgentChanges }: ProjectAIAssista
               onDismiss={() => setAgentResult(null)}
               onExpandFile={setExpandedFile}
             />
+          )}
+
+          {clarification && (
+            <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-4 space-y-3">
+              <div className="flex items-start gap-2">
+                <HelpCircle className="h-4 w-4 text-violet-500 mt-0.5 shrink-0" />
+                <p className="text-sm font-medium">{clarification.question}</p>
+              </div>
+              {clarification.options && clarification.options.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {clarification.options.map((opt) => (
+                    <Button
+                      key={opt}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => handleAnswerClarification(opt)}
+                      disabled={isLoading}
+                    >
+                      {opt}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Input
+                  value={clarificationAnswer}
+                  onChange={(e) => setClarificationAnswer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && clarificationAnswer.trim()) {
+                      handleAnswerClarification(clarificationAnswer.trim());
+                    }
+                  }}
+                  placeholder="Or type your own answer..."
+                  className="text-sm"
+                  disabled={isLoading}
+                />
+                <Button
+                  size="sm"
+                  onClick={() => clarificationAnswer.trim() && handleAnswerClarification(clarificationAnswer.trim())}
+                  disabled={isLoading || !clarificationAnswer.trim()}
+                >
+                  Reply
+                </Button>
+              </div>
+            </div>
           )}
 
           {proposedTasks && proposedTasks.length > 0 && (
