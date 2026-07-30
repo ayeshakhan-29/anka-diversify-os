@@ -5,6 +5,12 @@ export interface Message {
   timestamp: Date;
 }
 
+export interface ChecklistItem {
+  label: string;
+  checked: boolean;
+  category?: string;
+}
+
 export interface AgentResult {
   explanation: string;
   changes: { path: string; content: string; description: string }[];
@@ -17,4 +23,6 @@ export interface AgentResult {
   critiqueScore?: number;
   buildVerified?: boolean;
   buildErrors?: string;
+  verificationChecklist?: ChecklistItem[];
+  lifecycleStage?: string;
 }

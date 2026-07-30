@@ -24,6 +24,7 @@ import { SprintProposalCard, type SprintProposal } from "./sprint-proposal-card"
 import { PRReviewPanel } from "./pr-review-panel";
 import { AISidebar } from "./ai-sidebar";
 import { ChatInput } from "./chat-input";
+import { AgentLoadingState } from "./agent-loading-state";
 
 type Mode = "chat" | "agent";
 
@@ -950,25 +951,7 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
           ))}
 
           {isLoading && (
-            <div className="flex gap-3">
-              <Avatar className="h-8 w-8 shrink-0">
-                <AvatarFallback className={cn(mode === "agent" ? "bg-violet-600" : "bg-primary", "text-white")}>
-                  {mode === "agent" ? <Zap className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex items-center gap-2 rounded-lg bg-secondary/50 p-3">
-                <div className="flex gap-1">
-                  <span className="h-2 w-2 rounded-full bg-primary animate-bounce" />
-                  <span className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:0.2s]" />
-                  <span className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:0.4s]" />
-                </div>
-                {mode === "agent" && (
-                  <span className="text-xs text-muted-foreground ml-1">
-                    {currentBatchTaskTitle ? `Working on: ${currentBatchTaskTitle}` : "Analyzing codebase..."}
-                  </span>
-                )}
-              </div>
-            </div>
+            <AgentLoadingState mode={mode} currentBatchTaskTitle={currentBatchTaskTitle} />
           )}
 
           {agentResult && (
