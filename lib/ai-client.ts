@@ -4,6 +4,79 @@ export interface ChatRequest {
   context?: Record<string, any>;
 }
 
+export type TaskType =
+  | "DELETE_FOLDER"
+  | "DELETE_FILE"
+  | "NEW_FEATURE"
+  | "BUG_FIX"
+  | "REFACTOR"
+  | "FILE_CREATION"
+  | "CONFIG_CHANGE"
+  | "DOCS"
+  | "OPTIMIZATION";
+
+export type TaskRisk = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export type TaskComplexity = "SMALL" | "MEDIUM" | "LARGE" | "COMPLEX";
+
+export interface AgentProgressEvent {
+  step: number;
+  stageName: string;
+  label: string;
+  detail: string;
+  color: string;
+  badge: string;
+  progress: number;
+  log?: string;
+  taskType?: TaskType;
+  risk?: TaskRisk;
+  estimatedComplexity?: TaskComplexity;
+  targetPath?: string;
+  /** Full Execution Contract emitted in Stage 1 for frontend display */
+  executionContract?: ExecutionContract;
+}
+
+export type PipelineMode =
+  | "REPOSITORY"
+  | "STANDALONE"
+  | "DOCUMENTATION"
+  | "DIRECT_ANSWER";
+
+export type TargetEnvironment =
+  | "HTML_CSS_JS"
+  | "REACT_TS"
+  | "NODE_JS"
+  | "PYTHON"
+  | "MARKDOWN"
+  | "GENERIC";
+
+export type ValidationType =
+  | "TYPESCRIPT_BUILD"
+  | "BROWSER_HTML"
+  | "PYTHON_SYNTAX"
+  | "NONE";
+
+/** Mirrors backend ExecutionContract — drives all pipeline stages */
+export interface ExecutionContract {
+  goal: string;
+  taskType: TaskType;
+  risk: TaskRisk;
+  estimatedComplexity: TaskComplexity;
+  pipeline: PipelineMode;
+  environment: TargetEnvironment;
+  repositoryRequired: boolean;
+  expectedFiles: string[];
+  validationType: ValidationType;
+  targetPaths: string[];
+  allowedActions: string[];
+  forbiddenActions: string[];
+  maxFiles: number;
+  searchScope: string[];
+  contextScope: string[];
+  diffCriticEnabled: boolean;
+}
+
+
 export interface ProposedTask {
   title: string;
   description?: string;
@@ -276,12 +349,17 @@ class AIClient {
     needsClarification?: boolean;
     question?: string;
     options?: string[];
-    intent?: "BUG_FIX" | "FEATURE_ADD" | "REFACTOR" | "DOCS" | "OPTIMIZATION";
+    intent?: "BUG_FIX" | "FEATURE_ADD" | "REFACTOR" | "DOCS" | "OPTIMIZATION" | "DELETE_FOLDER" | "DELETE_FILE" | "NEW_FEATURE";
+    taskType?: TaskType;
+    risk?: TaskRisk;
+    estimatedComplexity?: TaskComplexity;
+    targetPath?: string;
     confidence?: number;
     roadmap?: { phase: number; title: string; layer?: string; targetFiles: string[]; description: string }[];
     securityPass?: boolean;
     critiqueScore?: number;
     buildVerified?: boolean;
+    repaired?: boolean;
     buildErrors?: string;
   }> {
     const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/agent/run`, {
@@ -289,6 +367,99 @@ class AIClient {
       body: JSON.stringify({ message, sessionId }),
     });
     return res.data;
+  }
+
+  async runAgentStream(
+    projectId: string,
+    message: string,
+    sessionId?: string,
+    onProgress?: (event: AgentProgressEvent) => void,
+  ): Promise<{
+    explanation: string;
+    changes: { path: string; content: string; description: string }[];
+    commitMessage: string;
+    sessionId: string;
+    needsClarification?: boolean;
+    question?: string;
+    options?: string[];
+    intent?: "BUG_FIX" | "FEATURE_ADD" | "REFACTOR" | "DOCS" | "OPTIMIZATION" | "DELETE_FOLDER" | "DELETE_FILE" | "NEW_FEATURE";
+    taskType?: TaskType;
+    risk?: TaskRisk;
+    estimatedComplexity?: TaskComplexity;
+    targetPath?: string;
+    confidence?: number;
+    roadmap?: { phase: number; title: string; layer?: string; targetFiles: string[]; description: string }[];
+    securityPass?: boolean;
+    critiqueScore?: number;
+    buildVerified?: boolean;
+    repaired?: boolean;
+    buildErrors?: string;
+  }> {
+    const url = `${this.baseUrl}/projects/${projectId}/agent/stream`;
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          ...this.getHeaders(),
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({ message, sessionId }),
+      });
+
+      if (!response.ok || !response.body) {
+        return this.runAgent(projectId, message, sessionId);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalResult: any = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+
+        for (const chunk of chunks) {
+          const lines = chunk.split("\n");
+          let eventName = "";
+          let dataStr = "";
+
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventName = line.slice(7).trim();
+            } else if (line.startsWith("data: ")) {
+              dataStr = line.slice(6).trim();
+            }
+          }
+
+          if (dataStr) {
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (eventName === "progress" && onProgress) {
+                onProgress(parsed);
+              } else if (eventName === "complete") {
+                finalResult = parsed;
+              } else if (eventName === "error") {
+                throw new Error(parsed.message || parsed.error || "Streaming error");
+              }
+            } catch (e) {
+              if (e instanceof Error && e.message === "Streaming error") {
+                throw e;
+              }
+            }
+          }
+        }
+      }
+
+      if (finalResult) return finalResult;
+      return this.runAgent(projectId, message, sessionId);
+    } catch {
+      return this.runAgent(projectId, message, sessionId);
+    }
   }
 
   async suggestTaskOrder(

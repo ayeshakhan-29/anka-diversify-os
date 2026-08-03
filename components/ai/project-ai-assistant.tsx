@@ -24,7 +24,7 @@ import { SprintProposalCard, type SprintProposal } from "./sprint-proposal-card"
 import { PRReviewPanel } from "./pr-review-panel";
 import { AISidebar } from "./ai-sidebar";
 import { ChatInput } from "./chat-input";
-import { AgentLoadingState } from "./agent-loading-state";
+import { AgentLoadingState, type ActiveStageInfo } from "./agent-loading-state";
 
 type Mode = "chat" | "agent";
 
@@ -146,6 +146,8 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
   const pendingAgentContextRef = useRef<{ baseText: string; qaHistory: QaTurn[]; taskDriven: boolean } | null>(null);
   const [batchTotal, setBatchTotal] = useState(0);
   const [currentBatchTaskTitle, setCurrentBatchTaskTitle] = useState<string | null>(null);
+  const [activeStage, setActiveStage] = useState<ActiveStageInfo | null>(null);
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
 
   // Task proposals
   const [proposedTasks, setProposedTasks] = useState<ProposedTask[] | null>(null);
@@ -372,6 +374,8 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
     setPushResult(null);
     setPushError(null);
     setClarification(null);
+    setActiveStage(null);
+    setTerminalLogs([]);
 
     if (qaHistory.length === 0) {
       setMessages((prev) => [
@@ -385,7 +389,17 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
       : text;
 
     try {
-      const result = await aiClient.runAgent(project.id, augmentedText, sessionId || undefined);
+      const result = await aiClient.runAgentStream(
+        project.id,
+        augmentedText,
+        sessionId || undefined,
+        (stageEvent) => {
+          setActiveStage(stageEvent);
+          if (stageEvent.log) {
+            setTerminalLogs((prev) => [...prev, stageEvent.log!].slice(-10));
+          }
+        }
+      );
       if (result.sessionId) setSessionId(result.sessionId);
 
       if (result.needsClarification && result.question) {
@@ -404,9 +418,10 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
         setSelectedFiles(new Set(result.changes.map((c) => c.path)));
         setApplyLocalSuccess(false);
 
-        // Append assistant chat message detailing what was accomplished
-        const summaryMsg = `✨ **AI Agent Execution Complete**\n\n**Intent:** \`${result.intent || "FEATURE_ADD"}\` (Confidence: ${Math.round((result.confidence || 0.95) * 100)}%)\n\n**Summary:** ${result.explanation}\n\n**Build Status:** ${
-          result.buildVerified ? "✅ Verified Clean (0 build errors)" : "❌ Build Failed / Flagged"
+        const summaryMsg = `✨ **AI Agent Execution Complete**\n\n**Task Type:** \`${result.taskType || "NEW_FEATURE"}\` | **Risk:** \`${result.risk || "MEDIUM"}\` | **Complexity:** \`${result.estimatedComplexity || "MEDIUM"}\`\n**Intent:** \`${result.intent || "FEATURE_ADD"}\` (Confidence: ${Math.round((result.confidence || 0.95) * 100)}%)\n\n**Summary:** ${result.explanation}\n\n**Build Status:** ${
+          result.buildVerified
+            ? (result.repaired ? "✅ Verified Clean (Self-Healed & Auto-Repaired)" : "✅ Verified Clean (0 build errors)")
+            : "❌ Build Failed / Flagged"
         }\n\n**Files Modified / Created (${result.changes.length}):**\n${result.changes
           .map((c) => `- \`${c.path}\`: ${c.description}`)
           .join("\n")}\n\n*Review the proposed diffs below to apply locally or authorize & push to GitHub.*`;
@@ -951,7 +966,12 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
           ))}
 
           {isLoading && (
-            <AgentLoadingState mode={mode} currentBatchTaskTitle={currentBatchTaskTitle} />
+            <AgentLoadingState
+              mode={mode}
+              currentBatchTaskTitle={currentBatchTaskTitle}
+              activeStage={activeStage}
+              terminalLogs={terminalLogs}
+            />
           )}
 
           {agentResult && (
