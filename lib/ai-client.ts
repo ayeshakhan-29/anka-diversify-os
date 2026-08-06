@@ -341,7 +341,7 @@ class AIClient {
   }
 
   // Coding Agent
-  async runAgent(projectId: string, message: string, sessionId?: string): Promise<{
+  async runAgent(projectId: string, message: string, sessionId?: string, repositoryId?: string): Promise<{
     explanation: string;
     changes: { path: string; content: string; description: string }[];
     commitMessage: string;
@@ -364,7 +364,7 @@ class AIClient {
   }> {
     const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/agent/run`, {
       method: "POST",
-      body: JSON.stringify({ message, sessionId }),
+      body: JSON.stringify({ message, sessionId, repositoryId }),
     });
     return res.data;
   }
@@ -374,6 +374,7 @@ class AIClient {
     message: string,
     sessionId?: string,
     onProgress?: (event: AgentProgressEvent) => void,
+    repositoryId?: string,
   ): Promise<{
     explanation: string;
     changes: { path: string; content: string; description: string }[];
@@ -403,11 +404,11 @@ class AIClient {
           ...this.getHeaders(),
           Accept: "text/event-stream",
         },
-        body: JSON.stringify({ message, sessionId }),
+        body: JSON.stringify({ message, sessionId, repositoryId }),
       });
 
       if (!response.ok || !response.body) {
-        return this.runAgent(projectId, message, sessionId);
+        return this.runAgent(projectId, message, sessionId, repositoryId);
       }
 
       const reader = response.body.getReader();
@@ -456,9 +457,9 @@ class AIClient {
       }
 
       if (finalResult) return finalResult;
-      return this.runAgent(projectId, message, sessionId);
+      return this.runAgent(projectId, message, sessionId, repositoryId);
     } catch {
-      return this.runAgent(projectId, message, sessionId);
+      return this.runAgent(projectId, message, sessionId, repositoryId);
     }
   }
 

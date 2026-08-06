@@ -17,6 +17,7 @@ import { ProjectAIAssistant } from "@/components/ai/project-ai-assistant";
 import { ProjectIDE } from "@/components/project/project-ide";
 import { PhaseStepper } from "@/components/project/phase-stepper";
 import { PhaseDetailView } from "@/components/project/phase-detail-view";
+import { ProjectRepositoriesPanel } from "@/components/project/project-repositories-panel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -735,6 +736,7 @@ export default function ProjectDetailPage({
                   { id: "kanban", label: "Kanban Board", icon: Kanban },
                   { id: "workflow", label: "Workflow", icon: Layers },
                   { id: "files", label: "Files", icon: FolderOpen },
+                  { id: "repositories", label: "Repositories", icon: GitMerge },
                   { id: "code", label: "Code", icon: Code },
                   { id: "chat", label: "Chat", icon: MessageSquare },
                   { id: "activity", label: "Activity", icon: ActivityIcon },
@@ -1064,6 +1066,11 @@ export default function ProjectDetailPage({
                   })
                 )}
               </div>
+            </TabsContent>
+
+            {/* ── Repositories ── */}
+            <TabsContent value="repositories" className="mt-0">
+              <ProjectRepositoriesPanel projectId={id} />
             </TabsContent>
 
             {/* ── Chat ── */}

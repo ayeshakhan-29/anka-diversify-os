@@ -835,3 +835,88 @@ export const projectApi = {
   },
 };
 
+export interface ProjectRepository {
+  id: string;
+  projectId: string;
+  name: string;
+  role: string;
+  githubUrl: string;
+  localPath?: string | null;
+  defaultBranch: string;
+  buildCommand?: string | null;
+  testCommand?: string | null;
+  lintCommand?: string | null;
+  typecheckCommand?: string | null;
+  isPrimary: boolean;
+  hasToken: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const projectRepositoryApi = {
+  async list(projectId: string): Promise<ProjectRepository[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/repositories`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET repositories failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  async create(
+    projectId: string,
+    payload: { name: string; role: string; githubUrl: string; githubToken?: string; localPath?: string },
+  ): Promise<ProjectRepository> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/repositories`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const { message } = await res.json().catch(() => ({ message: "" }));
+      throw new Error(message || `POST repositories failed: ${res.status}`);
+    }
+    const { data } = await res.json();
+    return data;
+  },
+
+  async update(
+    projectId: string,
+    repoId: string,
+    payload: Partial<{ name: string; role: string; githubUrl: string; githubToken: string; localPath: string; buildCommand: string; testCommand: string; lintCommand: string; typecheckCommand: string }>,
+  ): Promise<ProjectRepository> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/repositories/${repoId}`, {
+      method: "PUT",
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const { message } = await res.json().catch(() => ({ message: "" }));
+      throw new Error(message || `PUT repository failed: ${res.status}`);
+    }
+    const { data } = await res.json();
+    return data;
+  },
+
+  async remove(projectId: string, repoId: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/repositories/${repoId}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    if (!res.ok) {
+      const { message } = await res.json().catch(() => ({ message: "" }));
+      throw new Error(message || `DELETE repository failed: ${res.status}`);
+    }
+  },
+
+  async sync(projectId: string, repoId: string): Promise<{ repoName: string; lastSyncedAt: string }> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/repositories/${repoId}/sync`, {
+      method: "POST",
+      headers: getHeaders(),
+    });
+    if (!res.ok) {
+      const { message } = await res.json().catch(() => ({ message: "" }));
+      throw new Error(message || `POST repository sync failed: ${res.status}`);
+    }
+    const { data } = await res.json();
+    return data;
+  },
+};
