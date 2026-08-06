@@ -805,4 +805,33 @@ export const projectApi = {
     const { data } = await res.json();
     return data;
   },
+
+  async getKanbanBoard(projectId: string): Promise<any> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/kanban`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET kanban board failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  async generateKanbanBoard(projectId: string): Promise<any> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/kanban/generate`, {
+      method: "POST",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error(`POST generate kanban failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
+
+  async resolveClarification(projectId: string, clarificationId: string, selectedOption: string, userNotes?: string): Promise<any> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/kanban/clarifications/${clarificationId}/resolve`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ selectedOption, userNotes }),
+    });
+    if (!res.ok) throw new Error(`POST resolve clarification failed: ${res.status}`);
+    const { data } = await res.json();
+    return data;
+  },
 };
+
