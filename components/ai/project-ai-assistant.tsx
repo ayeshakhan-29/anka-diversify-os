@@ -626,12 +626,15 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
       const result = await aiClient.pushAgentChanges(project.id, changes, commitMessage);
       setPushResult(result);
       setAgentResult(null);
+      const pushSummary = result.pushes && result.pushes.length > 1
+        ? result.pushes.map((p) => `  - **${p.name}:** [View Commit](${p.url})`).join("\n")
+        : `- **Repository:** [View Commit on GitHub](${result.url})`;
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now().toString(),
           role: "assistant",
-          content: `🚀 **Changes Authorized & Pushed to GitHub!**\n\n- **Commit Message:** \`${commitMessage}\`\n- **Files Pushed:** ${changes.length}\n- **Repository:** [View Commit on GitHub](${result.url})`,
+          content: `🚀 **Changes Authorized & Pushed to GitHub!**\n\n- **Commit Message:** \`${commitMessage}\`\n- **Files Pushed:** ${changes.length}\n${pushSummary}`,
           timestamp: new Date(),
         },
       ]);
@@ -1012,6 +1015,7 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
               isApplyingLocal={isApplyingLocal}
               applyLocalSuccess={applyLocalSuccess}
               project={project}
+              repositories={repositories}
               onToggleFile={toggleFile}
               onCommitMessageChange={setCommitMessage}
               onPush={handlePush}

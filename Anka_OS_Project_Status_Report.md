@@ -456,4 +456,15 @@ Given this touches the pipeline the other team appears to be actively working on
 
 - No integration-validation stage beyond the cross-repo edge list itself — the spec calls for actually validating that producer/consumer contracts hold (e.g., a frontend sub-task's API call matches a backend sub-task's actual route). That would need either a new LLM call or static analysis, both out of scope here.
 - File/resource reservations (§14.3) — no collision detection if two runs touch overlapping files across repos concurrently.
-- The frontend diff-review panel doesn't yet show which repo each proposed change targets — the data (`AgentFileChange.repositoryId`) is there, the UI isn't.
+
+---
+
+## 19. Diff-Review Panel Now Shows Which Repo Each Change Targets
+
+Closed the smallest of §18.4's remaining gaps: the data (`AgentFileChange.repositoryId`) existed since §18, the UI didn't show it.
+
+- Frontend types (`components/ai/types.ts`, `lib/ai-client.ts`'s two inline `changes` return shapes) gained the matching optional `repositoryId` field — they'd been left out when the backend type was extended, so this was a real gap, not just missing UI.
+- `AgentDiffPanel` takes a new optional `repositories` prop (reuses the `ProjectRepository[]` state `ProjectAIAssistant` already fetches for the §10 repo selector — no new fetch) and shows a small repo-name badge next to each changed file's path, only when the project actually has more than one repo.
+- `handlePush`'s success message now lists each repo's commit link separately when `pushAgentChanges` returns more than one push (the `pushes[]` array from §18's multi-repo push), instead of always assuming a single repository.
+
+**Verified:** `npx tsc --noEmit` clean; live dev server compile clean, page returns 200. Not independently verified in an actual multi-repo push flow through a browser — the change is display-only logic layered on already-verified data (§18's live multi-repo context-map test, and the push-grouping logic test), and triggering it for real would require either a real OpenAI decomposition call or a real GitHub push, both intentionally avoided per §18.3.

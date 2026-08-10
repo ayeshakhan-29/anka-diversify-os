@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { AgentResult } from "./types";
 import type { Project } from "@/lib/types";
+import type { ProjectRepository } from "@/lib/project-api";
 
 interface AgentDiffPanelProps {
   agentResult: AgentResult;
@@ -34,6 +35,7 @@ interface AgentDiffPanelProps {
   isApplyingLocal: boolean;
   applyLocalSuccess: boolean;
   project: Project;
+  repositories?: ProjectRepository[];
   onToggleFile: (path: string) => void;
   onCommitMessageChange: (msg: string) => void;
   onPush: () => void;
@@ -52,6 +54,7 @@ export function AgentDiffPanel({
   isApplyingLocal,
   applyLocalSuccess,
   project,
+  repositories = [],
   onToggleFile,
   onCommitMessageChange,
   onPush,
@@ -190,6 +193,13 @@ export function AgentDiffPanel({
                 />
                 <Code className="h-3.5 w-3.5 text-violet-400 shrink-0" />
                 <span className="text-xs font-mono flex-1 truncate">{change.path}</span>
+                {repositories.length > 1 && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-border text-muted-foreground shrink-0">
+                    {repositories.find((r) => r.id === change.repositoryId)?.name
+                      || repositories.find((r) => r.isPrimary)?.name
+                      || "primary"}
+                  </span>
+                )}
                 <span className="text-xs text-muted-foreground truncate max-w-48">
                   {change.description}
                 </span>

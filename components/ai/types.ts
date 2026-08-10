@@ -15,7 +15,7 @@ export interface ChecklistItem {
 
 export interface AgentResult {
   explanation: string;
-  changes: { path: string; content: string; description: string }[];
+  changes: { path: string; content: string; description: string; repositoryId?: string }[];
   commitMessage: string;
   sessionId: string;
   intent?: "BUG_FIX" | "FEATURE_ADD" | "REFACTOR" | "DOCS" | "OPTIMIZATION" | "DELETE_FOLDER" | "DELETE_FILE" | "NEW_FEATURE";

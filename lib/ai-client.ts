@@ -396,7 +396,7 @@ class AIClient {
   // Coding Agent
   async runAgent(projectId: string, message: string, sessionId?: string, repositoryId?: string): Promise<{
     explanation: string;
-    changes: { path: string; content: string; description: string }[];
+    changes: { path: string; content: string; description: string; repositoryId?: string }[];
     commitMessage: string;
     sessionId: string;
     needsClarification?: boolean;
@@ -430,7 +430,7 @@ class AIClient {
     repositoryId?: string,
   ): Promise<{
     explanation: string;
-    changes: { path: string; content: string; description: string }[];
+    changes: { path: string; content: string; description: string; repositoryId?: string }[];
     commitMessage: string;
     sessionId: string;
     needsClarification?: boolean;
@@ -555,7 +555,11 @@ class AIClient {
     return res.suggestions;
   }
 
-  async pushAgentChanges(projectId: string, changes: { path: string; content: string }[], commitMessage: string): Promise<{ sha: string; url: string }> {
+  async pushAgentChanges(
+    projectId: string,
+    changes: { path: string; content: string; repositoryId?: string }[],
+    commitMessage: string,
+  ): Promise<{ sha: string; url: string; pushes?: { repositoryId: string | null; name: string; sha: string; url: string }[] }> {
     const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/agent/push`, {
       method: "POST",
       body: JSON.stringify({ changes, commitMessage }),
