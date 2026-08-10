@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import SignUpFormWithRole from '@/components/auth/signup-form-with-role';
+import SignUpForm from '@/components/auth/signup-form';
 import LeftPanel from '@/components/auth/left-panel';
 
 export default function SignUpPage() {
@@ -24,7 +24,7 @@ export default function SignUpPage() {
       <div className="relative flex w-full max-w-6xl min-h-[500px] sm:min-h-[600px] rounded-2xl overflow-hidden shadow-lg border-2 border-white">
         <LeftPanel type="signup" />
         
-        <SignUpFormWithRole />
+        <SignUpForm />
       </div>
     </div>
   );

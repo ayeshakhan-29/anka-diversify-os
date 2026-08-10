@@ -285,3 +285,48 @@ Next backlog item picked (§8's "Still not done" list): `ContextSnapshot` persis
 *§10 (Sprint 1 progress — agent wired to repository registry) added 6 August 2026.*
 *§11 (Sprint 1 progress — ContextSnapshot persistence) added 6 August 2026.*
 *§12 (Sprint 1 progress — audit UI for ContextSnapshot) added 10 August 2026.*
+*§13 (real RBAC, and a critical signup vulnerability fix) added 10 August 2026.*
+
+---
+
+## 13. Real RBAC — and a Critical Vulnerability Found and Fixed
+
+Next backlog item: turn `User.role` from an unenforced free-text string into real, enforced RBAC (flagged as a risk since v1.0). Scoping this surfaced something much worse than expected.
+
+### 13.1 Critical finding: public signup allowed self-service admin escalation
+
+**`POST /api/auth/signup` — a fully public, unauthenticated endpoint — accepted a client-supplied `role` field and validated it only against `["admin", "user", "manager"]`.** Anyone could register with `role: "admin"` in the request body and receive a valid admin JWT instantly, no invite or approval required.
+
+This was not merely a theoretical API-level gap: **the live, actually-rendered `/auth/signup` page used `signup-form-with-role.tsx`, which has a plain dropdown with a literal "Admin" option.** Any visitor to the signup page could select it and get full admin access. This had been sitting behind two duplicate signup components (`signup-form.tsx` vs `signup-form-with-role.tsx`) flagged as "unclear which is live" since the v1.0 report §7 item #10 — it turned out the vulnerable one was live.
+
+**Fixed:**
+- Backend (`auth-controller.ts`): public signup no longer accepts a client-supplied role at all — it's hardcoded to `"developer"` regardless of what's in the request body. Real role assignment now only happens through the admin-gated invite flow.
+- Frontend: `/auth/signup` now renders `signup-form.tsx` (which never sent a `role` field to begin with — the correct component). `signup-form-with-role.tsx` was deleted outright, not just unlinked, to remove any risk of it being re-wired later.
+
+### 13.2 What else shipped (the RBAC work itself)
+
+| Layer | What was built |
+|---|---|
+| Schema | New `Role` model — a canonical registry (`admin`, `manager`, `developer`, `designer`, `tester`), seeded via `prisma/seed.ts`. Deliberately **not** a hard FK on `User.role` — that column stays a String so the ~16 existing `user.role === '...'` comparisons across both repos keep working unchanged. The registry is what makes the string a real, validated value instead of arbitrary free text. Migration `20260810163218_add_role_registry`, additive-only. |
+| Middleware | `src/middleware/rbac.ts` — `requireRole(...roles)` (403s if `req.user.role` isn't in the allowed list; must run after `authenticateToken`) and `isValidRole(role)` (checks against the seeded `Role` table, 60s in-memory cache). |
+| Enforcement | `requireRole("admin")` applied at the mount point for `/api/admin`, `/api/admin/rules`, `/api/admin/departments` (in `src/index.ts`), and per-route in `invite-routes.ts` for invite create/list/revoke and user management — leaving `validate/:token` and `accept/:token` public by design, unchanged. |
+| Validation | `isValidRole()` now gates invite creation and user-role updates — an admin can no longer set a user's role to an arbitrary string either. |
+| Frontend | `app/admin/layout.tsx` (new) wraps every `/admin/*` page in the existing-but-previously-unused `ProtectedRoute` component with `requiredRole="admin"` — this component already had role-gating logic built in, it had simply never been imported anywhere in `app/`, so `/admin/*` pages had zero client-side gating before this. |
+
+### 13.3 Verification performed
+
+All tested live against the real dev DB and running backend with real JWTs:
+- Signed up with `role: "admin"` in the request body → received `role: "developer"` back. Escalation closed.
+- That same non-admin user hitting `/api/admin/departments` → `403 {"message":"Requires role: admin"}`.
+- The real seeded admin (`admin@anka.os`) hitting the same route → `200`.
+- Non-admin attempting `POST /api/invites` → `403`.
+- Admin attempting to create an invite with `role: "superadmin"` → `400 {"error":"Invalid role: superadmin"}`.
+- `npx tsc --noEmit` clean on both repos.
+- `/admin` and `/auth/signup` both compile and return 200 against a real (temporarily started, then cleanly stopped by PID) dev server.
+- Test user and test invite attempts cleaned up afterward.
+
+**Not independently verified:** the frontend `ProtectedRoute` redirect/"Access Denied" UI itself wasn't exercised in an actual browser session (it depends on client-side `localStorage` auth state that curl can't simulate) — confirmed by reading the component logic and confirming clean compilation, not by a live click-through. Worth a real browser check next time you're testing as a non-admin user.
+
+### 13.4 Scope note
+
+This delivers real *enforcement* and *validation* — not the full generic `PermissionPolicy`/fine-grained-permission system from spec §5.1/§17.1. `Role` is a flat registry (5 roles, no per-permission granularity yet); `requireRole()` is a simple allow-list, not a policy engine. That's a deliberate, disclosed scope choice, not an oversight — a bigger permission system can build on this registry later if the team needs finer-grained control than "admin vs. everyone else."
