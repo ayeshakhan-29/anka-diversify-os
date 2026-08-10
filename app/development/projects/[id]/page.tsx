@@ -18,6 +18,7 @@ import { ProjectIDE } from "@/components/project/project-ide";
 import { PhaseStepper } from "@/components/project/phase-stepper";
 import { PhaseDetailView } from "@/components/project/phase-detail-view";
 import { ProjectRepositoriesPanel } from "@/components/project/project-repositories-panel";
+import { ContextSnapshotAuditPanel } from "@/components/ai/context-snapshot-audit-panel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1157,6 +1158,14 @@ export default function ProjectDetailPage({
                     ))}
                   </div>
                 )}
+
+                <div className="mt-10 pt-6 border-t">
+                  <h2 className="text-lg font-semibold mb-1">AI Context Audit</h2>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    What the AI agent actually saw — repo, files, and task classification — for each run.
+                  </p>
+                  <ContextSnapshotAuditPanel projectId={id} />
+                </div>
               </div>
             </TabsContent>
 

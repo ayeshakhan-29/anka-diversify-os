@@ -91,6 +91,25 @@ export interface EpicProposal {
   tasks: ProposedTask[];
 }
 
+export interface ContextSnapshot {
+  id: string;
+  projectId: string;
+  repositoryId: string | null;
+  sessionId: string;
+  userMessage: string;
+  repoUrl: string | null;
+  repoName: string | null;
+  defaultBranch: string | null;
+  repoLastSyncedAt: string | null;
+  keyFilesUsed: string[] | null;
+  approvedArchitectureId: string | null;
+  taskType: string | null;
+  risk: string | null;
+  estimatedComplexity: string | null;
+  targetPaths: string[] | null;
+  createdAt: string;
+}
+
 export interface ProjectHealth {
   score: number;
   status: "healthy" | "warning" | "critical";
@@ -322,6 +341,11 @@ class AIClient {
 
   async getProjectHealth(projectId: string): Promise<ProjectHealth> {
     return this.request<ProjectHealth>(`/projects/${projectId}/health`);
+  }
+
+  async getContextSnapshots(projectId: string): Promise<ContextSnapshot[]> {
+    const res = await this.request<{ success: boolean; data: ContextSnapshot[] }>(`/projects/${projectId}/context-snapshots`);
+    return res.data;
   }
 
   async listPullRequests(projectId: string): Promise<{ pullRequests: PullRequest[] }> {

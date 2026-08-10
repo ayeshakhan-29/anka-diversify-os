@@ -260,6 +260,23 @@ Next backlog item picked (§8's "Still not done" list): `ContextSnapshot` persis
 - No `ArchitectureDriftRecord` yet (flagging when approved architecture and live repo state disagree).
 - No audit UI — the data is queryable via API only.
 
+## 12. Sprint 1 Progress (continued) — Audit UI for ContextSnapshot
+
+§11 shipped `ContextSnapshot` as a write-only table — every agent run recorded its context, but nothing displayed it. Closed that loop with a read-only audit panel.
+
+### 12.1 What shipped
+
+- `GET /api/ai/projects/:id/context-snapshots` client wired into `lib/ai-client.ts` (`getContextSnapshots`), with a matching `ContextSnapshot` frontend type.
+- `components/ai/context-snapshot-audit-panel.tsx` — compact card list per snapshot: user message, timestamp, task-type/risk badges, targeted repo name (or "(primary)" when `repositoryId` is null), and file-in-context count.
+- Mounted under the existing **Activity** tab on the project detail page, below the human activity feed, as an "AI Context Audit" section — not a new top-level tab, to keep the addition low-footprint.
+
+### 12.2 Verification performed
+
+- `npx tsc --noEmit` clean.
+- Confirmed the live API response shape matches the frontend type exactly (inserted a real row via script, fetched it through the actual `/context-snapshots` endpoint with a real JWT, compared field-for-field).
+- Started this project's own dev server (not previously running in this session) and did a real render check: `GET /development/projects/:id` returned 200 with a clean compile log and no runtime errors, with a real snapshot row present to confirm the non-empty state renders. Test row cleaned up afterward.
+- **Process note:** cleanup used `pkill -f "next dev"`, which was too broad and also killed an unrelated Next.js dev server the user had running on port 3000 (a separate portfolio project). Not restarted, since the exact project directory wasn't known — flagged directly to the user rather than guessing.
+
 ---
 
 *Anka OS Internal — Confidential — Project Status Report v2.0 — 5 August 2026 — supersedes v1.0 (8 July 2026)*
@@ -267,3 +284,4 @@ Next backlog item picked (§8's "Still not done" list): `ContextSnapshot` persis
 *§9 (Sprint 1 progress — multi-repo model) added 6 August 2026.*
 *§10 (Sprint 1 progress — agent wired to repository registry) added 6 August 2026.*
 *§11 (Sprint 1 progress — ContextSnapshot persistence) added 6 August 2026.*
+*§12 (Sprint 1 progress — audit UI for ContextSnapshot) added 10 August 2026.*
