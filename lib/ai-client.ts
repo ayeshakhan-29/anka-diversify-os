@@ -107,7 +107,23 @@ export interface ContextSnapshot {
   risk: string | null;
   estimatedComplexity: string | null;
   targetPaths: string[] | null;
+  evidenceLabels: Record<string, string> | null;
   createdAt: string;
+}
+
+export interface ArchitectureDriftRecord {
+  id: string;
+  projectId: string;
+  description: string;
+  affectedScope: string[] | null;
+  evidence: Record<string, unknown> | null;
+  risk: string;
+  proposedResolution: string | null;
+  ownerUserId: string | null;
+  status: string;
+  detectedBy: string;
+  createdAt: string;
+  resolvedAt: string | null;
 }
 
 export interface ProjectHealth {
@@ -345,6 +361,19 @@ class AIClient {
 
   async getContextSnapshots(projectId: string): Promise<ContextSnapshot[]> {
     const res = await this.request<{ success: boolean; data: ContextSnapshot[] }>(`/projects/${projectId}/context-snapshots`);
+    return res.data;
+  }
+
+  async getDriftRecords(projectId: string): Promise<ArchitectureDriftRecord[]> {
+    const res = await this.request<{ success: boolean; data: ArchitectureDriftRecord[] }>(`/projects/${projectId}/drift-records`);
+    return res.data;
+  }
+
+  async resolveDriftRecord(projectId: string, recordId: string, status: string, proposedResolution?: string): Promise<ArchitectureDriftRecord> {
+    const res = await this.request<{ success: boolean; data: ArchitectureDriftRecord }>(`/projects/${projectId}/drift-records/${recordId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status, proposedResolution }),
+    });
     return res.data;
   }
 

@@ -13,6 +13,13 @@ const riskBadgeClass: Record<string, string> = {
   CRITICAL: "bg-rose-500/10 text-rose-500 border-rose-500/30",
 };
 
+const evidenceBadgeClass: Record<string, string> = {
+  "Verified-Repository": "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
+  "Approved-Human": "bg-blue-500/10 text-blue-500 border-blue-500/30",
+  "Inferred-Agent": "bg-violet-500/10 text-violet-500 border-violet-500/30",
+  "Unknown": "bg-rose-500/10 text-rose-500 border-rose-500/30",
+};
+
 interface ContextSnapshotAuditPanelProps {
   projectId: string;
 }
@@ -85,6 +92,20 @@ export function ContextSnapshotAuditPanel({ projectId }: ContextSnapshotAuditPan
                 </span>
               )}
             </div>
+            {snap.evidenceLabels && Object.keys(snap.evidenceLabels).length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t">
+                {Object.entries(snap.evidenceLabels).map(([source, label]) => (
+                  <Badge
+                    key={source}
+                    variant="outline"
+                    className={`text-[9px] ${evidenceBadgeClass[label] || ""}`}
+                    title={source}
+                  >
+                    {source}: {label}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       ))}

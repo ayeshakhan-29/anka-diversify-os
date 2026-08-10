@@ -375,3 +375,33 @@ Re-checked each for real importers before deleting (not just trusting the v1.0 r
 - Backend restarted cleanly (nodemon) after the `s3.service.ts` deletion and `upload.service.ts` change; health check 200.
 
 ---
+
+## 16. Evidence Labels and ArchitectureDriftRecord (spec §12.4/§13.1)
+
+The last major piece of the spec's hallucination-control section, deliberately scoped conservatively since it touches the actively-tuned agent pipeline: no rewrite of the pipeline's internal logic, no new LLM calls, purely additive labeling and a cheap heuristic.
+
+### 16.1 What shipped
+
+| Layer | What was built |
+|---|---|
+| Schema | `ContextSnapshot.evidenceLabels` (new JSON column, additive) — classifies each context source a run used, per spec §13.1's vocabulary (`Verified-Repository`, `Approved-Human`, `Inferred-Agent`, `Unknown`). New `ArchitectureDriftRecord` model (description, affected scope, evidence, risk, proposed resolution, status, `detectedBy`). Migration `20260810165509_add_evidence_and_drift_tracking`, additive-only (one `ALTER TABLE ADD COLUMN`, one new table). |
+| Agent wiring | Both computed inline in `runCodingAgent`, in the same spot the §11 `ContextSnapshot` write already lives — no changes to the 7-stage pipeline's actual classification/execution logic. Evidence labels are a pure labeling pass over data already gathered (repo files present → `Verified-Repository`, approved architecture present → `Approved-Human`, task classification → `Inferred-Agent`, always). The drift check is a timestamp-only heuristic: if the repo was synced more than 24h after the current approved architecture doc was written, it creates an `ArchitectureDriftRecord` (deduped — won't spam one per run). **This is explicitly not semantic drift detection** — it doesn't compare doc content to code, just staleness as a signal for a human to look. |
+| API | `GET/POST /api/ai/projects/:id/drift-records`, `PATCH /api/ai/projects/:id/drift-records/:id/` to resolve (status: `resolved_code_corrected` / `resolved_architecture_updated` / `accepted_exception` / `dismissed`). Human-created records get `detectedBy: "human"`, so a real conflict spotted during other work can be logged the same way as the heuristic's. |
+| Frontend | `ContextSnapshotAuditPanel` now shows evidence-label badges per snapshot. New `ArchitectureDriftPanel` — open records surfaced first with a resolve dropdown, resolved ones shown dimmed — mounted below it in the Activity tab. |
+
+### 16.2 Bonus fix found along the way: PATCH was missing from CORS
+
+Adding the `PATCH /drift-records/:id` route surfaced that the backend's CORS `methods` allowlist (`src/index.ts`) only listed `GET, POST, PUT, DELETE, OPTIONS` — **`PATCH` was never in it.** Confirmed via a real preflight `OPTIONS` request (curl doesn't enforce CORS, so my usual live-endpoint tests wouldn't have caught this — a real browser would have silently failed on every PATCH call). This wasn't specific to the new route: `rules-routes.ts`, `departments-routes.ts`, `kanban-routes.ts` (task status updates), and the task-checklist route all already used PATCH and would have hit the same wall. Fixed by adding `PATCH` to the CORS methods array — a one-line fix with broader impact than just this feature.
+
+### 16.3 Verification performed
+
+- `npx tsc --noEmit` clean on both repos.
+- Drift-record CRUD lifecycle (create → list → resolve) tested live against the real dev DB with a real JWT.
+- CORS fix verified with a real `OPTIONS` preflight request (not just a plain `curl` call, which doesn't exercise preflight) — confirmed `PATCH` now appears in `Access-Control-Allow-Methods`.
+- The heuristic's arithmetic and dedup query verified via a standalone script against three edge cases (repo synced well after architecture → fires; same-day → doesn't fire; architecture newer than repo → doesn't fire) plus a real dedup query against the dev DB.
+- Frontend: `npx tsc --noEmit` clean; page returns 200 with no server/compile errors; inserted a real `ContextSnapshot` (with `evidenceLabels`) and `ArchitectureDriftRecord` via script, confirmed both round-trip correctly through their respective API endpoints. **Not independently verified:** the actual rendered badges/panel in a browser — the Activity tab's content isn't in the static HTML `curl` fetches (Radix Tabs only mounts the active tab client-side), so this was confirmed by API-shape correctness and clean compilation, not a visual check. Same disclosed boundary as previous frontend work this session.
+- Full live agent run (which would exercise this code inside `runCodingAgent` for real) intentionally not triggered, for the same reason as §11 — avoiding real OpenAI spend to confirm logic already verified in isolation.
+
+### 16.4 Scope note
+
+Both pieces are intentionally the cheapest correct implementation of what the spec asks for, not the full vision. Evidence labels here classify *context sources* (repo/architecture/task), not *individual claims* the agent makes in its response text — true per-claim labeling would require changing how the agent formats its output, which is a much larger, riskier change to the same pipeline others are actively tuning. Drift detection is timestamp-based, not semantic — it can't tell you *what* changed, only *that* enough time passed that something might have. Both are real, working, additive capabilities; neither is the end state the spec describes.
