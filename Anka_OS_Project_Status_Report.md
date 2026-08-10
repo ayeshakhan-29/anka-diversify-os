@@ -415,3 +415,45 @@ v1.0 recommendation #8: "keep the real one, remove or clearly relabel the simula
 Since the real terminal (`components/project/terminal-panel.tsx`, xterm.js + WebSocket + node-pty) is inherently project-scoped — its session is tied to a specific project's local workspace via `projectId` — there's no "global" real terminal to swap in directly. The fix: rewrote `app/development/terminal/page.tsx` to show a project picker (remembers the last-selected project in `sessionStorage`) and render the exact same, unmodified `TerminalPanel` component the IDE tab already uses, instead of the ~450-line fake command interpreter with hardcoded welcome text it had. Zero changes to `terminal-panel.tsx` itself — its WebSocket/PTY logic is pre-existing, proven code already live in the IDE tab; this only reuses it with a different `projectId` at the call site.
 
 **Verified:** `npx tsc --noEmit` clean; confirmed no other code referenced the deleted fake-terminal internals; live page load returns 200 with the old "Welcome to Anka Terminal v1.0.0" hardcoded text confirmed gone from the rendered output. **Not independently verified:** an actual live PTY session through the picker in a browser (the project list and WebSocket connection both happen client-side after hydration, which `curl` can't exercise) — same disclosed boundary as other frontend-only checks this session.
+
+---
+
+## 18. Coordinator/Repository-Worker Pattern (spec §11.2) — Multi-Repo Task Decomposition
+
+The last major gap named in §9.4/§10.4: the agent could be *pointed* at either repo in a multi-repo project, but couldn't reason across both in one run. Investigated first rather than building from scratch — there's an existing task-decomposition engine (`task-decomposer.ts` + `sub-task-executor.ts`, built by the Kanban/workflow team) that already implements most of spec §14 for a single repo. This work extends it to be repo-aware instead of duplicating it, and fixes a real bug found while tracing how it connects to the rest of the pipeline.
+
+### 18.1 Two bugs found before any new capability was added
+
+1. **Decomposition ran with zero real file knowledge.** `decomposer.decomposeTask(request.message, projectContext, intentResult)` passed `projectContext` as the `{existingFiles, repoSnapshot}` parameter — but `ProjectContext` has no `existingFiles` field at all. It was always `[]`. The LLM decomposing a complex task into sub-tasks never saw what files actually existed in the repo.
+2. **My own §10 repo-targeting never reached this path.** Both the decomposition and sub-task-execution calls used the original project-level `projectContext`, not `effectiveSnapshot` (the repo-targeted value §10 resolves). Picking a secondary repo for a complex task silently fell back to the primary repo anyway.
+
+Both fixed by passing the already-correctly-resolved `{ existingFiles: repoFileNames, repoSnapshot: effectiveSnapshot }` object instead of raw `projectContext` — a two-line change, no logic redesign.
+
+### 18.2 Multi-repo extension
+
+Scoped as an extension of the existing engine, not a parallel new system, and deliberately avoiding changes to `SubTaskExecutor.executeSubTask`'s internals (kept 100% unmodified — only what data it's *called with* changed) to minimize risk to code the other team is actively iterating on.
+
+| Piece | What was built |
+|---|---|
+| Types | `SubTask.repositoryId?`, `SubTaskExecutionResult.repositoryId?`, `AgentFileChange.repositoryId?`, new `CrossRepoEdge` and `RepositoryContextOption` — all additive/optional. |
+| Decomposition | `TaskDecomposer.decomposeTask` gained an optional 4th param, `availableRepositories?`. Only populated when a project has >1 `ProjectRepository`; single-repo projects get the exact same prompt and behavior as before. When present, the prompt lists each repo with a file sample and requires every sub-task to carry a `repositoryId`. A returned `repositoryId` that doesn't match one of the offered repos is dropped, not trusted. |
+| Cross-repo signal | `computeCrossRepoEdges()` — scoped down from the spec's full "shared contract negotiation" to what's honest to compute without another LLM call: which dependency edges in the graph cross a repository boundary. Not a negotiated API contract, a map of where one exists — attached to the graph as `crossRepoEdges` and persisted in `TaskDecomposition.graphJson` (no schema change needed, it's already a JSON column). |
+| Execution | Orchestration in `runCodingAgent` now builds a `repoContextMap` (one entry per `ProjectRepository`, reusing the existing `getEffectiveSnapshot`/`getRepositorySnapshot` methods from §10) and resolves each sub-task's context from its own repo before calling the unmodified `executeSubTask`. Untagged sub-tasks (every sub-task, in the single-repo case) fall back to the original single-repo context — unchanged behavior. |
+| Push | `POST /agent/push` now accepts `changes: {path, content, repositoryId?}[]`, groups by target repo, and pushes to each with that repo's own token/branch. Untagged changes go to the primary repo exactly as before. Response includes both a top-level `{sha, url}` (mirrors the first push, keeps existing frontend callers working unchanged) and a new `pushes[]` array with the full per-repo breakdown. |
+
+### 18.3 Verification performed
+
+Given this touches the pipeline the other team appears to be actively working on, verification leaned harder on isolated logic checks over live end-to-end runs:
+
+- `npx tsc --noEmit` clean after each phase.
+- `computeCrossRepoEdges` verified against 3 constructed graphs (cross-repo dependency detected; same-repo dependency correctly produces no edge; untagged/single-repo nodes correctly produce no edges and don't crash) via a standalone script mirroring the exact algorithm.
+- `repositoryId` hallucination-filtering verified for all 3 cases (valid ID kept, made-up ID dropped, single-repo mode drops everything).
+- Push-grouping logic verified against this project's real `ProjectRepository` row — confirmed correct bucketing of tagged vs. untagged changes, and that a bogus `repositoryId` correctly resolves to `null` (the controller's 400 path).
+- The multi-repo context-map builder verified against a real temporary secondary repo: created it, synced it for real (reusing §10's `buildRepositoryContext`), confirmed `repoContextMap` correctly picked up its real file list via the *unmodified* `getEffectiveSnapshot` method, then cleaned up. One data oddity observed (the primary repo's long-existing snapshot showed 0 files where the freshly-synced secondary showed 2) — traced to that snapshot's own stale/legacy data shape (`keyFiles` empty, `fileTree` non-empty), not to anything this work introduced; the method itself was reused unmodified either way.
+- **Deliberately not tested:** an actual live `TaskDecomposer.decomposeTask` call (real OpenAI spend to confirm prompt-construction logic already reviewable in code), and an actual `POST /agent/push` to a real repo (would create real commits on a real GitHub repository — visible and hard to reverse, so not something to do without explicit sign-off, unlike the read-only/local verification used everywhere else this session).
+
+### 18.4 Still not done from §11.2
+
+- No integration-validation stage beyond the cross-repo edge list itself — the spec calls for actually validating that producer/consumer contracts hold (e.g., a frontend sub-task's API call matches a backend sub-task's actual route). That would need either a new LLM call or static analysis, both out of scope here.
+- File/resource reservations (§14.3) — no collision detection if two runs touch overlapping files across repos concurrently.
+- The frontend diff-review panel doesn't yet show which repo each proposed change targets — the data (`AgentFileChange.repositoryId`) is there, the UI isn't.
