@@ -338,3 +338,40 @@ This delivers real *enforcement* and *validation* — not the full generic `Perm
 Immediate, one-line follow-up to §13: `GET /api/projects/config/s3` (flagged since v1.0 §7 item #11, and re-flagged in §1's "still open" table) was reachable by any authenticated user, not just admins — it exposes whether AWS env vars are set, the bucket name, and key length. Now that `requireRole()` exists, added `requireRole('admin')` directly on that route in `project-routes.ts`.
 
 **Verified live:** a freshly-signed-up non-admin user got `403 {"message":"Requires role: admin"}`; the real admin got `200` with the expected config-status payload. Test user cleaned up afterward.
+
+---
+
+## 15. Dead Code Cleanup
+
+Picked from the remaining backlog: delete the confirmed-dead code flagged since v1.0 §7. Re-verification changed the plan for one item.
+
+### 15.1 Correction: `s3.service.ts` was not actually dead
+
+v1.0 (and this report's own §9.4) described `s3.service.ts` as having zero importers and being confirmed dead. Re-checking before deleting found that's no longer true — `project-controller.ts`'s `getFileDownloadUrl` had picked up a real call to `S3Service.getPresignedUrl` at some point since. That's worse than dead code: it meant the long-standing `AWS_S3_BUCKET_NAME` vs. `AWS_S3_BUCKET` mismatch (the exact bug a past commit already fixed once, in `upload.service.ts`) was live again in the download path. Neither env var is actually set in this dev `.env`, so both silently fall back to the same default bucket name and the bug isn't currently visible — but it would break downloads the moment someone configures a real bucket via the documented `AWS_S3_BUCKET` var, since uploads and downloads would then point at two different buckets.
+
+**Fixed properly instead of just deleted:** added `generateDownloadUrl(key)` to `upload.service.ts` (the correct implementation, already used for uploads/deletes) using its single `BUCKET` constant, repointed `project-controller.ts` at it, then deleted `s3.service.ts` — now there is exactly one S3 implementation, one bucket constant, no fork possible. Verified: compiles clean, backend stays healthy after restart, no other references remain. **Not independently verified:** an actual end-to-end file download, since no files exist on the test project and no real S3 credentials are configured in this dev environment — the fix was verified by code review + compile + confirming both upload and download now read the identical `BUCKET` constant, not by a live download.
+
+### 15.2 Confirmed and deleted
+
+Re-checked each for real importers before deleting (not just trusting the v1.0 report, since it turned out to be wrong for `s3.service.ts`):
+
+| Removed | Why |
+|---|---|
+| `lib/enhanced-ai-service.ts` | Zero importers from `app/`/`components/`. Called the now-also-deleted `/api/ai/chat` route. |
+| `lib/context-manager.ts` | Only imported by `enhanced-ai-service.ts` — dead transitively. |
+| `lib/github-service.ts` | Zero importers (had its own unresolved `// TODO: Implement GitHub context building`, per v1.0). |
+| `lib/project-ai-service.ts` | Literal 0-byte file. |
+| `app/api/ai/chat/route.ts` | Only ever called by `enhanced-ai-service.ts`. Required its own `OPENAI_API_KEY` on the frontend deployment and violated the documented rule that only `project-api.ts`/`ai-client.ts` make HTTP calls. |
+| `app/projects/[projectId]/ai/page.tsx` (duplicate AI chat route) | Superseded by the in-tab AI Assistant; zero nav links pointed to it anywhere. |
+| `hooks/use-project-chat.ts` | Exclusively used by the deleted duplicate page. |
+| `components/ui/context-panel.tsx` | Exclusively used by the deleted duplicate page. |
+
+**Explicitly kept, not deleted:** `components/ui/chat-container.tsx` and `components/ui/session-list.tsx` — both looked related to the same dead cluster but turned out to be shared with the live `/ai/general` page. Confirmed via importer search before touching anything.
+
+### 15.3 Verification performed
+
+- `npx tsc --noEmit` clean on both repos (after clearing a stale `.next/` type-check cache that referenced the just-deleted routes — expected, gitignored, not a real error).
+- Started this project's own dev server (stopped afterward by PID, not a broad `pkill`, learning from the earlier mistake): `/development/projects/:id` → 200, `/ai/general` → 200 (both untouched, confirming the shared components survived correctly), `/projects/:id/ai` (deleted route) → 404 as expected.
+- Backend restarted cleanly (nodemon) after the `s3.service.ts` deletion and `upload.service.ts` change; health check 200.
+
+---
