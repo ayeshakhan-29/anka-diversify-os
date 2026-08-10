@@ -252,7 +252,7 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-1.5"
+                  className="gap-1.5 cursor-pointer"
                   onClick={() => setBriefDialogOpen(true)}
                   disabled={isApproved || generating}
                 >
@@ -269,20 +269,20 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
                   )}
                 </Button>
                 {isApproved ? (
-                  <Button variant="outline" size="sm" onClick={handleRevise} disabled={busy}>
+                  <Button variant="outline" size="sm" className="cursor-pointer" onClick={handleRevise} disabled={busy}>
                     Revise Approved Doc
                   </Button>
                 ) : (
-                  <Button variant="outline" size="sm" onClick={startEditing} disabled={generating}>
+                  <Button variant="outline" size="sm" className="cursor-pointer" onClick={startEditing} disabled={generating}>
                     {latestArtifact ? "Edit / New Version" : "Draft Proposal"}
                   </Button>
                 )}
                 {latestArtifact && (
                   <>
-                    <Button variant="outline" size="icon" className="h-8 w-8" title="Copy to clipboard" onClick={handleCopy}>
+                    <Button variant="outline" size="icon" className="h-8 w-8 cursor-pointer" title="Copy to clipboard" onClick={handleCopy}>
                       {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                     </Button>
-                    <Button variant="outline" size="icon" className="h-8 w-8" title="Download as PDF" onClick={handleDownloadPdf}>
+                    <Button variant="outline" size="icon" className="h-8 w-8 cursor-pointer" title="Download as PDF" onClick={handleDownloadPdf}>
                       <Download className="h-3.5 w-3.5" />
                     </Button>
                   </>
@@ -311,10 +311,10 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
                   className="font-mono text-sm"
                 />
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setIsEditing(false)} disabled={busy}>
+                  <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setIsEditing(false)} disabled={busy}>
                     Cancel
                   </Button>
-                  <Button size="sm" onClick={handleSaveDraft} disabled={busy || !draftContent.trim()} className="gap-2">
+                  <Button size="sm" onClick={handleSaveDraft} disabled={busy || !draftContent.trim()} className="gap-2 cursor-pointer">
                     {busy ? (
                       <>
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -362,7 +362,7 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
                   />
                   <div className="flex flex-wrap gap-2">
                     <Button
-                      className="gap-2 bg-success text-success-foreground hover:bg-success/90"
+                      className="gap-2 bg-success text-success-foreground hover:bg-success/90 cursor-pointer"
                       onClick={handleApprove}
                       disabled={busy}
                     >
@@ -380,7 +380,7 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
                     </Button>
                     <Button
                       variant="outline"
-                      className="gap-2 border-warning text-warning hover:bg-warning/10"
+                      className="gap-2 border-warning text-warning hover:bg-warning/10 cursor-pointer"
                       onClick={handleRequestChanges}
                       disabled={busy}
                     >
@@ -399,7 +399,7 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
                   </div>
                 </>
               ) : (
-                <Button onClick={handleRequestApproval} disabled={busy} className="gap-2">
+                <Button onClick={handleRequestApproval} disabled={busy} className="gap-2 cursor-pointer">
                   {busy ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -522,10 +522,10 @@ export function PhaseDetailView({ projectId, phase, onStatesChange }: PhaseDetai
             rows={5}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={handleGenerateWithAI} disabled={generating}>
+            <Button variant="outline" className="cursor-pointer" onClick={handleGenerateWithAI} disabled={generating}>
               Skip — generate from project info only
             </Button>
-            <Button onClick={handleGenerateWithAI} disabled={generating}>
+            <Button className="cursor-pointer" onClick={handleGenerateWithAI} disabled={generating}>
               Generate
             </Button>
           </DialogFooter>
