@@ -330,3 +330,11 @@ All tested live against the real dev DB and running backend with real JWTs:
 ### 13.4 Scope note
 
 This delivers real *enforcement* and *validation* — not the full generic `PermissionPolicy`/fine-grained-permission system from spec §5.1/§17.1. `Role` is a flat registry (5 roles, no per-permission granularity yet); `requireRole()` is a simple allow-list, not a policy engine. That's a deliberate, disclosed scope choice, not an oversight — a bigger permission system can build on this registry later if the team needs finer-grained control than "admin vs. everyone else."
+
+---
+
+## 14. Small Follow-up — S3 Debug Endpoint Now Admin-Gated
+
+Immediate, one-line follow-up to §13: `GET /api/projects/config/s3` (flagged since v1.0 §7 item #11, and re-flagged in §1's "still open" table) was reachable by any authenticated user, not just admins — it exposes whether AWS env vars are set, the bucket name, and key length. Now that `requireRole()` exists, added `requireRole('admin')` directly on that route in `project-routes.ts`.
+
+**Verified live:** a freshly-signed-up non-admin user got `403 {"message":"Requires role: admin"}`; the real admin got `200` with the expected config-status payload. Test user cleaned up afterward.
