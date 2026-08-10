@@ -405,3 +405,13 @@ Adding the `PATCH /drift-records/:id` route surfaced that the backend's CORS `me
 ### 16.4 Scope note
 
 Both pieces are intentionally the cheapest correct implementation of what the spec asks for, not the full vision. Evidence labels here classify *context sources* (repo/architecture/task), not *individual claims* the agent makes in its response text — true per-claim labeling would require changing how the agent formats its output, which is a much larger, riskier change to the same pipeline others are actively tuning. Drift detection is timestamp-based, not semantic — it can't tell you *what* changed, only *that* enough time passed that something might have. Both are real, working, additive capabilities; neither is the end state the spec describes.
+
+---
+
+## 17. Duplicate Terminal Implementations Reconciled
+
+v1.0 recommendation #8: "keep the real one, remove or clearly relabel the simulated one." Investigating found this wasn't a simple delete like the earlier dead-code cleanup — `/development/terminal` (the fake one) is **actively linked from the main sidebar nav and the `/development` dashboard**, unlike the other duplicates removed in §15, which were unreferenced. Deleting it outright would remove a first-class nav item.
+
+Since the real terminal (`components/project/terminal-panel.tsx`, xterm.js + WebSocket + node-pty) is inherently project-scoped — its session is tied to a specific project's local workspace via `projectId` — there's no "global" real terminal to swap in directly. The fix: rewrote `app/development/terminal/page.tsx` to show a project picker (remembers the last-selected project in `sessionStorage`) and render the exact same, unmodified `TerminalPanel` component the IDE tab already uses, instead of the ~450-line fake command interpreter with hardcoded welcome text it had. Zero changes to `terminal-panel.tsx` itself — its WebSocket/PTY logic is pre-existing, proven code already live in the IDE tab; this only reuses it with a different `projectId` at the call site.
+
+**Verified:** `npx tsc --noEmit` clean; confirmed no other code referenced the deleted fake-terminal internals; live page load returns 200 with the old "Welcome to Anka Terminal v1.0.0" hardcoded text confirmed gone from the rendered output. **Not independently verified:** an actual live PTY session through the picker in a browser (the project list and WebSocket connection both happen client-side after hydration, which `curl` can't exercise) — same disclosed boundary as other frontend-only checks this session.
