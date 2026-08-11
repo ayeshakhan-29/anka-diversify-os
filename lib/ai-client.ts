@@ -126,6 +126,18 @@ export interface ArchitectureDriftRecord {
   resolvedAt: string | null;
 }
 
+export interface FileReservation {
+  id: string;
+  projectId: string;
+  repositoryId: string | null;
+  filePath: string;
+  holderType: string;
+  sessionId: string;
+  reason: string | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface ProjectHealth {
   score: number;
   status: "healthy" | "warning" | "critical";
@@ -366,6 +378,11 @@ class AIClient {
 
   async getDriftRecords(projectId: string): Promise<ArchitectureDriftRecord[]> {
     const res = await this.request<{ success: boolean; data: ArchitectureDriftRecord[] }>(`/projects/${projectId}/drift-records`);
+    return res.data;
+  }
+
+  async getFileReservations(projectId: string): Promise<FileReservation[]> {
+    const res = await this.request<{ success: boolean; data: FileReservation[] }>(`/projects/${projectId}/file-reservations`);
     return res.data;
   }
 

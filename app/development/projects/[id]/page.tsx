@@ -20,6 +20,7 @@ import { PhaseDetailView } from "@/components/project/phase-detail-view";
 import { ProjectRepositoriesPanel } from "@/components/project/project-repositories-panel";
 import { ContextSnapshotAuditPanel } from "@/components/ai/context-snapshot-audit-panel";
 import { ArchitectureDriftPanel } from "@/components/ai/architecture-drift-panel";
+import { FileReservationsPanel } from "@/components/ai/file-reservations-panel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1174,6 +1175,14 @@ export default function ProjectDetailPage({
                     Flagged disagreements between the approved architecture doc and observed repository state.
                   </p>
                   <ArchitectureDriftPanel projectId={id} />
+                </div>
+
+                <div className="mt-10 pt-6 border-t">
+                  <h2 className="text-lg font-semibold mb-1">Active File Reservations</h2>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Files currently locked by an in-progress multi-repo agent run, to prevent collisions.
+                  </p>
+                  <FileReservationsPanel projectId={id} />
                 </div>
               </div>
             </TabsContent>

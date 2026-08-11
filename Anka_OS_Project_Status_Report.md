@@ -468,3 +468,41 @@ Closed the smallest of §18.4's remaining gaps: the data (`AgentFileChange.repos
 - `handlePush`'s success message now lists each repo's commit link separately when `pushAgentChanges` returns more than one push (the `pushes[]` array from §18's multi-repo push), instead of always assuming a single repository.
 
 **Verified:** `npx tsc --noEmit` clean; live dev server compile clean, page returns 200. Not independently verified in an actual multi-repo push flow through a browser — the change is display-only logic layered on already-verified data (§18's live multi-repo context-map test, and the push-grouping logic test), and triggering it for real would require either a real OpenAI decomposition call or a real GitHub push, both intentionally avoided per §18.3.
+
+---
+
+## 20. Decorative Rules Engine — Already Fixed, No Work Needed
+
+Investigated before building anything, per the pattern that caught the `s3.service.ts` false-dead-code assumption in §15. **This backlog item is stale — someone already fixed it.** The v1.0/§8 framing ("lets you create rules of any category with arbitrary condition/action JSON; only 2 hardcoded rule types actually execute") doesn't match the current code:
+
+- `app/admin/rules/page.tsx`'s "Enforcement" dropdown only offers 3 options: "Policy only," "Sprint Auto-Close," "Overdue Escalation" — there's no way to create a rule that claims to be enforced but isn't.
+- The "Run Now" action only renders when `rule.ruleType` is set — policy-only rules get no run button at all.
+- Backend `rules-controller.ts`'s `/rules/:id/run` explicitly rejects (400, *"This rule has no enforcement type — it is policy-only"*) any attempt to run a non-enforced rule; `runRule()` has a safe default for anything unrecognized.
+
+The free-text `conditions`/`actions` fields still exist for policy-only rules, but they're clearly documentation-only — never presented as executable. No code changed for this item.
+
+## 21. File/Resource Reservations (spec §14.3)
+
+Last item from §18.4's remaining list. Advisory locking so parallel agent runs — or an agent run and a human — don't unknowingly collide on the same file, especially now that a single decomposed task can touch two repos at once (§18).
+
+### 21.1 What shipped
+
+| Layer | What was built |
+|---|---|
+| Schema | New `FileReservation` model — `projectId`, `repositoryId` (nullable, primary repo), `filePath`, `holderType` (`agent_run`/`human`), `sessionId`, `reason`, `createdAt`, `expiresAt`. Additive-only migration `20260811174657_add_file_reservations`. Explicitly advisory, not OS-level: nothing stops a human editing a file directly outside this system, and reservations always expire (10 min default) so a crashed run can't block a project indefinitely. |
+| Service | `file-reservation-service.ts` — `acquireReservations()` (grants files not already held by a *different* active session; re-requesting your own already-held file renews rather than conflicts), `releaseReservations()`, `listActiveReservations()`. |
+| Agent wiring | Inside the §18 decomposition/execution loop in `runCodingAgent`: before each sub-task executes, its `targetFiles` are reserved (scoped to whichever repo it targets). A conflict fails just that sub-task with a clear error — *"File reservation conflict: ... is held by another active session"* — rather than racing to overwrite; matches the spec's "sent for human reconciliation" language rather than attempting automatic serialization/merging, which was out of scope. Reservations are released in a `finally` block covering success, failure, and thrown errors, so a session never holds files longer than its own run. |
+| API | `GET /api/ai/projects/:id/file-reservations` — lists currently-active (non-expired) reservations. |
+| Frontend | New `FileReservationsPanel`, mounted under the Activity tab below Architecture Drift — shows file path, holder type, reason, and expiry time for each active lock. |
+
+### 21.2 Verification performed
+
+- `npx tsc --noEmit` clean on both repos.
+- Core logic verified against the real dev DB via a standalone script covering 4 cases: fresh acquire succeeds; a different session colliding on the same file gets a conflict while an unrelated file in the same request is still granted; the *same* session re-requesting its own file is treated as a renewal, not a conflict; releasing a session frees its files for another session to acquire. All 4 passed.
+- Live API endpoint verified with a real reservation inserted via script — response shape matches the frontend type exactly.
+- Frontend: clean compile, live dev server render check (200, no errors) with a real active reservation present. Test data cleaned up afterward.
+- **Not independently verified:** an actual live decomposed multi-repo agent run hitting a real reservation conflict end-to-end — same disclosed boundary as §18 (would require real OpenAI spend). The conflict-handling code path itself was verified directly (the acquire/conflict logic), not exercised through a full agent run.
+
+### 21.3 Scope note
+
+This is advisory locking scoped to the decomposition/execution path only — a single-shot (non-decomposed) agent run doesn't acquire reservations, since that path wasn't touched to keep changes contained to where §14.3 actually lives (multi-task orchestration). There's also no UI to manually release a stuck reservation before its TTL expires; the 10-minute default was chosen so that's rarely necessary, but a "force release" admin action would be a reasonable follow-up if it comes up in practice.
