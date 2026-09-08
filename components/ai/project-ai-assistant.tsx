@@ -15,7 +15,7 @@ import { projectApi } from "@/lib/project-api";
 import { aiClient, type PullRequest, type PRReview } from "@/lib/ai-client";
 import type { Project, Task } from "@/lib/types";
 
-import type { Message, AgentResult } from "./types";
+import { getChangeKey, normalizePreservedSelection, toggleChangeSelection, type Message, type AgentResult, type AgentFileChange } from "./types";
 import { ChatMessage } from "./chat-message";
 import { AgentDiffPanel } from "./agent-diff-panel";
 import { TaskProposalCard } from "./task-proposal-card";
@@ -88,7 +88,7 @@ function taskPrompt(task: { title: string; description?: string }): string {
 interface ProjectAIAssistantProps {
   project: Project;
   tasks?: Task[];
-  onAgentChanges?: (changes: { path: string; content: string; description: string }[]) => void;
+  onAgentChanges?: (changes: AgentFileChange[]) => void;
   runTaskRequest?: RunTaskRequest | null;
   onRunTaskConsumed?: () => void;
   onTaskCompleted?: (taskId: string) => void;
@@ -211,10 +211,13 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
     try {
       const saved = localStorage.getItem(AGENT_STORAGE_KEY);
       if (saved) {
-        const parsed: AgentResult = JSON.parse(saved);
+        const parsed: AgentResult & { selectedFiles?: string[] } = JSON.parse(saved);
         setAgentResult(parsed);
         setCommitMessage(parsed.commitMessage);
-        setSelectedFiles(new Set(parsed.changes.map((c) => c.path)));
+        const rawSelected = Array.isArray(parsed.selectedFiles) && parsed.selectedFiles.length > 0
+          ? parsed.selectedFiles
+          : parsed.changes.map((c) => getChangeKey(c));
+        setSelectedFiles(normalizePreservedSelection(rawSelected, parsed.changes));
       }
     } catch {}
   }, [AGENT_STORAGE_KEY]);
@@ -389,17 +392,53 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
       : text;
 
     try {
-      const result = await aiClient.runAgentStream(
-        project.id,
-        augmentedText,
-        sessionId || undefined,
-        (stageEvent) => {
-          setActiveStage(stageEvent);
-          if (stageEvent.log) {
-            setTerminalLogs((prev) => [...prev, stageEvent.log!].slice(-10));
-          }
+      // Check if project has multiple repositories registered
+      let repos: import("@/lib/types").ProjectRepository[] = [];
+      try {
+        repos = await projectApi.getRepositories(project.id);
+      } catch {
+        // Fall back to single-repo if repository list fails to load
+      }
+
+      const isMultiRepo = repos.length >= 2;
+
+      const onProgressHandler = (stageEvent: any) => {
+        setActiveStage(stageEvent);
+        const rawLogs = stageEvent.log
+          ? stageEvent.log.split("\n").filter((l: string) => l.trim().length > 0)
+          : stageEvent.detail
+          ? [`[${stageEvent.label || "Agent"}] ${stageEvent.detail}`]
+          : [];
+
+        if (rawLogs.length > 0) {
+          setTerminalLogs((prev) => {
+            const newLogs = [...prev];
+            for (const line of rawLogs) {
+              if (newLogs.length === 0 || newLogs[newLogs.length - 1] !== line) {
+                newLogs.push(line);
+              }
+            }
+            return newLogs.slice(-100);
+          });
         }
-      );
+      };
+
+      const result = isMultiRepo
+        ? await aiClient.runMultiRepoAgentStream(
+            project.id,
+            augmentedText,
+            repos.map((r) => r.id),
+            sessionId || undefined,
+            undefined,
+            onProgressHandler,
+          )
+        : await aiClient.runAgentStream(
+            project.id,
+            augmentedText,
+            sessionId || undefined,
+            onProgressHandler,
+          );
+
       if (result.sessionId) setSessionId(result.sessionId);
 
       if (result.needsClarification && result.question) {
@@ -415,15 +454,15 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
       if (result.changes.length > 0) {
         setAgentResult(result);
         setCommitMessage(result.commitMessage);
-        setSelectedFiles(new Set(result.changes.map((c) => c.path)));
+        setSelectedFiles(new Set(result.changes.map((c) => getChangeKey(c))));
         setApplyLocalSuccess(false);
 
-        const summaryMsg = `✨ **AI Agent Execution Complete**\n\n**Task Type:** \`${result.taskType || "NEW_FEATURE"}\` | **Risk:** \`${result.risk || "MEDIUM"}\` | **Complexity:** \`${result.estimatedComplexity || "MEDIUM"}\`\n**Intent:** \`${result.intent || "FEATURE_ADD"}\` (Confidence: ${Math.round((result.confidence || 0.95) * 100)}%)\n\n**Summary:** ${result.explanation}\n\n**Build Status:** ${
+        const summaryMsg = `✨ **${isMultiRepo ? "Multi-Repository Coordination Complete" : "AI Agent Execution Complete"}**\n\n**Task Type:** \`${result.taskType || "NEW_FEATURE"}\` | **Risk:** \`${result.risk || "MEDIUM"}\` | **Complexity:** \`${result.estimatedComplexity || "MEDIUM"}\`\n**Intent:** \`${result.intent || "FEATURE_ADD"}\` (Confidence: ${Math.round((result.confidence || 0.95) * 100)}%)\n\n**Summary:** ${result.explanation}\n\n**Build Status:** ${
           result.buildVerified
             ? (result.repaired ? "✅ Verified Clean (Self-Healed & Auto-Repaired)" : "✅ Verified Clean (0 build errors)")
             : "❌ Build Failed / Flagged"
         }\n\n**Files Modified / Created (${result.changes.length}):**\n${result.changes
-          .map((c) => `- \`${c.path}\`: ${c.description}`)
+          .map((c) => `- \`${c.path}\`${c.repositoryId ? ` [${c.repositoryId}]` : ""}: ${c.description}`)
           .join("\n")}\n\n*Review the proposed diffs below to apply locally or authorize & push to GitHub.*`;
 
         setMessages((prev) => [
@@ -608,20 +647,31 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
   };
 
   const handlePush = async () => {
-    if (!agentResult || selectedFiles.size === 0) return;
+    if (!agentResult) return;
+    const changes = agentResult.changes.filter((c) =>
+      selectedFiles.has(getChangeKey(c)) || selectedFiles.has(c.path)
+    );
+    if (changes.length === 0) {
+      setPushError("No proposed files are currently selected for push.");
+      return;
+    }
     setIsPushing(true);
     setPushError(null);
     try {
-      const changes = agentResult.changes.filter((c) => selectedFiles.has(c.path));
       const result = await aiClient.pushAgentChanges(project.id, changes, commitMessage);
       setPushResult(result);
       setAgentResult(null);
+
+      const pushDetails = (result as any).pushes && (result as any).pushes.length > 1
+        ? `\n- **Repositories Pushed (${(result as any).pushes.length}):**\n${(result as any).pushes.map((p: any) => `  • **${p.name}**: [View Commit](${p.url}) (${p.sha?.slice(0, 7)})`).join("\n")}`
+        : `\n- **Repository:** [View Commit on GitHub](${result.url})`;
+
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now().toString(),
           role: "assistant",
-          content: `🚀 **Changes Authorized & Pushed to GitHub!**\n\n- **Commit Message:** \`${commitMessage}\`\n- **Files Pushed:** ${changes.length}\n- **Repository:** [View Commit on GitHub](${result.url})`,
+          content: `🚀 **Changes Authorized & Pushed to GitHub!**\n\n- **Commit Message:** \`${commitMessage}\`\n- **Files Pushed:** ${changes.length}${pushDetails}`,
           timestamp: new Date(),
         },
       ]);
@@ -634,12 +684,13 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
   };
 
   const handleApplyLocal = async () => {
-    if (!agentResult || selectedFiles.size === 0) return;
+    if (!agentResult) return;
+    const changes = agentResult.changes
+      .filter((c) => selectedFiles.has(getChangeKey(c)) || selectedFiles.has(c.path))
+      .map(({ path, content }) => ({ path, content }));
+    if (changes.length === 0) return;
     setIsApplyingLocal(true);
     try {
-      const changes = agentResult.changes
-        .filter((c) => selectedFiles.has(c.path))
-        .map(({ path, content }) => ({ path, content }));
       await projectApi.applyLocalChanges(project.id, changes);
       setApplyLocalSuccess(true);
       setMessages((prev) => [
@@ -879,12 +930,8 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const toggleFile = (path: string) => {
-    setSelectedFiles((prev) => {
-      const next = new Set(prev);
-      next.has(path) ? next.delete(path) : next.add(path);
-      return next;
-    });
+  const toggleFile = (keyOrPath: string) => {
+    setSelectedFiles((prev) => toggleChangeSelection(prev, keyOrPath, agentResult?.changes || []));
   };
 
   const toggleProposedTask = (i: number) => {

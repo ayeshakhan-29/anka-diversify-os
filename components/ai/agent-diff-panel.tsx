@@ -20,8 +20,9 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
+  Eye,
 } from "lucide-react";
-import type { AgentResult } from "./types";
+import { getChangeKey, type AgentResult, type AgentFileChange } from "./types";
 import type { Project } from "@/lib/types";
 
 interface AgentDiffPanelProps {
@@ -34,12 +35,12 @@ interface AgentDiffPanelProps {
   isApplyingLocal: boolean;
   applyLocalSuccess: boolean;
   project: Project;
-  onToggleFile: (path: string) => void;
+  onToggleFile: (keyOrPath: string) => void;
   onCommitMessageChange: (msg: string) => void;
   onPush: () => void;
   onApplyLocal: () => void;
   onDismiss: () => void;
-  onExpandFile: (path: string | null) => void;
+  onExpandFile: (keyOrPath: string | null) => void;
 }
 
 export function AgentDiffPanel({
@@ -61,6 +62,10 @@ export function AgentDiffPanel({
 }: AgentDiffPanelProps) {
   const [showBuildErrors, setShowBuildErrors] = useState(false);
   const [showPushConfirm, setShowPushConfirm] = useState(false);
+
+  const selectedCount = agentResult.changes.filter(
+    (c) => selectedFiles.has(getChangeKey(c)) || selectedFiles.has(c.path)
+  ).length;
 
   const handlePushClick = () => {
     setShowPushConfirm(true);
@@ -117,6 +122,24 @@ export function AgentDiffPanel({
               {agentResult.securityPass ? "Security Pass" : "Security Flagged"}
             </span>
           )}
+          {agentResult.visualVerification && agentResult.visualVerification.status !== "NOT_APPLICABLE" && (
+            <span
+              className={`text-[10px] font-mono px-2 py-0.5 rounded flex items-center gap-1 border ${
+                agentResult.visualVerification.status === "PASSED"
+                  ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                  : agentResult.visualVerification.status === "PASSED_WITH_WARNINGS"
+                  ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                  : "bg-rose-500/15 text-rose-400 border-rose-500/30"
+              }`}
+            >
+              <Eye className="h-3 w-3" />
+              {agentResult.visualVerification.status === "PASSED"
+                ? "Visual Pass"
+                : agentResult.visualVerification.status === "PASSED_WITH_WARNINGS"
+                ? "Visual Warn"
+                : "Visual Fail"}
+            </span>
+          )}
         </div>
         <button onClick={onDismiss} className="text-muted-foreground hover:text-foreground">
           <X className="h-4 w-4" />
@@ -142,6 +165,91 @@ export function AgentDiffPanel({
             {showBuildErrors && (
               <div className="p-3 border-t border-rose-500/20 bg-black/40 font-mono text-[11px] text-rose-200 overflow-x-auto max-h-48 whitespace-pre-wrap">
                 {agentResult.buildErrors}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Visual Verification Section */}
+        {agentResult.visualVerification && agentResult.visualVerification.status !== "NOT_APPLICABLE" && (
+          <div className="rounded-md border border-border bg-card/60 p-3 space-y-2 text-xs">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-1.5 font-medium">
+                <Eye className="h-3.5 w-3.5 text-sky-400" />
+                <span>Visual Verification</span>
+              </div>
+              <span
+                className={`text-[10px] font-mono px-2 py-0.5 rounded flex items-center gap-1 border ${
+                  agentResult.visualVerification.status === "PASSED"
+                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                    : agentResult.visualVerification.status === "PASSED_WITH_WARNINGS"
+                    ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                    : "bg-rose-500/15 text-rose-400 border-rose-500/30"
+                }`}
+              >
+                {agentResult.visualVerification.status === "PASSED" ? (
+                  <>
+                    <CheckCircle2 className="h-3 w-3" /> PASSED
+                  </>
+                ) : agentResult.visualVerification.status === "PASSED_WITH_WARNINGS" ? (
+                  <>
+                    <AlertTriangle className="h-3 w-3" /> PASSED WITH WARNINGS
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="h-3 w-3" /> {agentResult.visualVerification.status}
+                  </>
+                )}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono text-muted-foreground pt-1 border-t border-border/40">
+              <div>
+                <span className="text-foreground/70">Framework: </span>
+                {agentResult.visualVerification.framework}
+              </div>
+              <div>
+                <span className="text-foreground/70">Route: </span>
+                {agentResult.visualVerification.route}
+              </div>
+              {agentResult.visualVerification.httpStatus !== undefined && (
+                <div>
+                  <span className="text-foreground/70">HTTP: </span>
+                  {agentResult.visualVerification.httpStatus}
+                </div>
+              )}
+              {agentResult.visualVerification.durationMs !== undefined && (
+                <div>
+                  <span className="text-foreground/70">Duration: </span>
+                  {agentResult.visualVerification.durationMs}ms
+                </div>
+              )}
+            </div>
+
+            {agentResult.visualVerification.screenshotPath && (
+              <div className="text-[11px] font-mono text-muted-foreground pt-1">
+                <span className="text-foreground/70">Screenshot: </span>
+                <span className="text-sky-300 break-all">{agentResult.visualVerification.screenshotPath}</span>
+              </div>
+            )}
+
+            {(agentResult.visualVerification.startupErrors ||
+              agentResult.visualVerification.pageErrors.length > 0 ||
+              agentResult.visualVerification.consoleErrors.length > 0 ||
+              agentResult.visualVerification.failedRequests.length > 0) && (
+              <div className="space-y-1 pt-1 font-mono text-[11px] text-rose-300 bg-rose-950/20 p-2 rounded border border-rose-500/20 max-h-36 overflow-y-auto whitespace-pre-wrap">
+                {agentResult.visualVerification.startupErrors && (
+                  <div>{agentResult.visualVerification.startupErrors}</div>
+                )}
+                {agentResult.visualVerification.pageErrors.map((err, idx) => (
+                  <div key={`page-err-${idx}`}>Page error: {err}</div>
+                ))}
+                {agentResult.visualVerification.consoleErrors.map((err, idx) => (
+                  <div key={`console-err-${idx}`}>Console error: {err}</div>
+                ))}
+                {agentResult.visualVerification.failedRequests.map((req, idx) => (
+                  <div key={`failed-req-${idx}`}>Failed request: {req}</div>
+                ))}
               </div>
             )}
           </div>
@@ -175,117 +283,128 @@ export function AgentDiffPanel({
 
         {/* File Diffs List */}
         <div className="space-y-1.5">
-          {agentResult.changes.map((change) => (
-            <div key={change.path} className="rounded-md border bg-background overflow-hidden">
-              <div
-                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-secondary/30"
-                onClick={() => onExpandFile(expandedFile === change.path ? null : change.path)}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedFiles.has(change.path)}
-                  onChange={() => onToggleFile(change.path)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="h-3.5 w-3.5 accent-violet-500"
-                />
-                <Code className="h-3.5 w-3.5 text-violet-400 shrink-0" />
-                <span className="text-xs font-mono flex-1 truncate">{change.path}</span>
-                <span className="text-xs text-muted-foreground truncate max-w-48">
-                  {change.description}
-                </span>
-              </div>
-              {expandedFile === change.path && (
-                <div className="border-t">
-                  <SyntaxHighlighter
-                    style={oneDark}
-                    language={change.path.split(".").pop() || "text"}
-                    PreTag="div"
-                    customStyle={{ margin: 0, borderRadius: 0, fontSize: "0.7rem", maxHeight: "300px" }}
-                  >
-                    {change.content}
-                  </SyntaxHighlighter>
+          {agentResult.changes.map((change) => {
+            const changeKey = getChangeKey(change);
+            const isExpanded = expandedFile === changeKey || expandedFile === change.path;
+            const isSelected = selectedFiles.has(changeKey) || selectedFiles.has(change.path);
+
+            return (
+              <div key={changeKey} className="rounded-md border bg-background overflow-hidden">
+                <div
+                  className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-secondary/30"
+                  onClick={() => onExpandFile(isExpanded ? null : changeKey)}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggleFile(changeKey)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-3.5 w-3.5 accent-violet-500"
+                  />
+                  <Code className="h-3.5 w-3.5 text-violet-400 shrink-0" />
+                  <span className="text-xs font-mono flex-1 truncate">{change.path}</span>
+                  {change.repositoryId && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20 shrink-0">
+                      {change.repositoryId}
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground truncate max-w-48">
+                    {change.description}
+                  </span>
                 </div>
-              )}
-            </div>
-          ))}
+                {isExpanded && (
+                  <div className="border-t">
+                    <SyntaxHighlighter
+                      style={oneDark}
+                      language={change.path.split(".").pop() || "text"}
+                      PreTag="div"
+                      customStyle={{ margin: 0, borderRadius: 0, fontSize: "0.7rem", maxHeight: "300px" }}
+                    >
+                      {change.content}
+                    </SyntaxHighlighter>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Action Controls */}
         <div className="space-y-2 pt-1">
-          <div className="flex items-center gap-2">
-            <GitCommit className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <Input
-              value={commitMessage}
-              onChange={(e) => onCommitMessageChange(e.target.value)}
-              placeholder="Commit message..."
-              className="h-7 text-xs font-mono"
-            />
-          </div>
-          {pushError && <p className="text-xs text-destructive">{pushError}</p>}
-          {applyLocalSuccess && (
-            <p className="text-xs text-green-500 flex items-center gap-1">
-              <Check className="h-3.5 w-3.5" /> Files written to local project — run it in the
-              terminal to preview.
-            </p>
-          )}
-
-          {/* User Confirmation Banner before pushing */}
-          {showPushConfirm && (
-            <div className="p-3 rounded-md border border-violet-500/40 bg-violet-500/10 space-y-2 text-xs">
-              <div className="font-semibold text-violet-300 flex items-center gap-1.5">
-                <Github className="h-4 w-4 text-violet-400" />
-                <span>Confirm Push to GitHub Repository?</span>
+              <div className="flex items-center gap-2">
+                <GitCommit className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <Input
+                  value={commitMessage}
+                  onChange={(e) => onCommitMessageChange(e.target.value)}
+                  placeholder="Commit message..."
+                  className="h-7 text-xs font-mono"
+                />
               </div>
-              <p className="text-muted-foreground">
-                You are about to push {selectedFiles.size} file change{selectedFiles.size !== 1 ? "s" : ""} to GitHub with commit message: &quot;{commitMessage}&quot;.
-              </p>
-              {agentResult.buildVerified === false && (
-                <p className="text-rose-400 font-medium flex items-center gap-1">
-                  <AlertTriangle className="h-3.5 w-3.5" /> Note: Build verification failed for these changes.
+              {pushError && <p className="text-xs text-destructive">{pushError}</p>}
+              {applyLocalSuccess && (
+                <p className="text-xs text-green-500 flex items-center gap-1">
+                  <Check className="h-3.5 w-3.5" /> Files written to local project — run it in the
+                  terminal to preview.
                 </p>
               )}
-              <div className="flex justify-end gap-2 pt-1">
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowPushConfirm(false)}>
-                  Cancel
-                </Button>
+
+              {/* User Confirmation Banner before pushing */}
+              {showPushConfirm && (
+                <div className="p-3 rounded-md border border-violet-500/40 bg-violet-500/10 space-y-2 text-xs">
+                  <div className="font-semibold text-violet-300 flex items-center gap-1.5">
+                    <Github className="h-4 w-4 text-violet-400" />
+                    <span>Confirm Push to GitHub Repository?</span>
+                  </div>
+                  <p className="text-muted-foreground">
+                    You are about to push {selectedCount} file change{selectedCount !== 1 ? "s" : ""} to GitHub with commit message: &quot;{commitMessage}&quot;.
+                  </p>
+                  {agentResult.buildVerified === false && (
+                    <p className="text-rose-400 font-medium flex items-center gap-1">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Note: Build verification failed for these changes.
+                    </p>
+                  )}
+                  <div className="flex justify-end gap-2 pt-1">
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowPushConfirm(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white"
+                      onClick={handleConfirmPush}
+                      disabled={isPushing}
+                    >
+                      {isPushing ? "Pushing..." : "Yes, Authorize & Push"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 flex-wrap">
+                {project.localPath && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 border-green-500/40 text-green-400 hover:bg-green-500/10 text-xs h-8"
+                    onClick={onApplyLocal}
+                    disabled={isApplyingLocal || selectedCount === 0}
+                  >
+                    {isApplyingLocal ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />Applying...
+                      </>
+                    ) : (
+                      <>
+                        <FolderOpen className="h-3.5 w-3.5 mr-1" />Apply Locally
+                      </>
+                    )}
+                  </Button>
+                )}
                 <Button
                   size="sm"
-                  className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white"
-                  onClick={handleConfirmPush}
-                  disabled={isPushing}
+                  className="flex-1 bg-violet-600 hover:bg-violet-700 text-white text-xs h-8"
+                  onClick={handlePushClick}
+                  disabled={isPushing || selectedCount === 0 || !commitMessage.trim() || showPushConfirm}
                 >
-                  {isPushing ? "Pushing..." : "Yes, Authorize & Push"}
-                </Button>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-2 flex-wrap">
-            {project.localPath && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="flex-1 border-green-500/40 text-green-400 hover:bg-green-500/10 text-xs h-8"
-                onClick={onApplyLocal}
-                disabled={isApplyingLocal || selectedFiles.size === 0}
-              >
-                {isApplyingLocal ? (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />Applying...
-                  </>
-                ) : (
-                  <>
-                    <FolderOpen className="h-3.5 w-3.5 mr-1" />Apply Locally
-                  </>
-                )}
-              </Button>
-            )}
-            <Button
-              size="sm"
-              className="flex-1 bg-violet-600 hover:bg-violet-700 text-white text-xs h-8"
-              onClick={handlePushClick}
-              disabled={isPushing || selectedFiles.size === 0 || !commitMessage.trim() || showPushConfirm}
-            >
               {isPushing ? (
                 <>
                   <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />Pushing...

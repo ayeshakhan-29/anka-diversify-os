@@ -1,4 +1,4 @@
-import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember, Sprint, ChecklistItem, GitCommitItem, GitBranchItem, GitPullItem, ProjectPhaseState, PhaseArtifact, PhaseApproval, WorkflowPhase, WorkflowRun } from "./types";
+import type { Project, Task, ProjectFile, Activity, Comment, ProjectChatMessage, ProjectMember, Sprint, ChecklistItem, GitCommitItem, GitBranchItem, GitPullItem, ProjectPhaseState, PhaseArtifact, PhaseApproval, WorkflowPhase, WorkflowRun, ProjectRepository, CreateProjectRepositoryInput } from "./types";
 
 export interface AppNotification {
   id: string;
@@ -832,6 +832,79 @@ export const projectApi = {
     if (!res.ok) throw new Error(`POST resolve clarification failed: ${res.status}`);
     const { data } = await res.json();
     return data;
+  },
+
+  // ── Multi-Repository Support ──────────────────────────────────────────
+  async getRepositories(projectId: string): Promise<ProjectRepository[]> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/repositories`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`GET /projects/${projectId}/repositories failed: ${res.status}`);
+    const { data } = await res.json();
+    return (data as any[]).map((r) => ({
+      ...r,
+      dependencies: Array.isArray(r.dependencies) ? r.dependencies : [],
+      hasToken: Boolean(r.hasToken),
+    }));
+  },
+
+  async createRepository(projectId: string, payload: CreateProjectRepositoryInput): Promise<ProjectRepository> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/repositories`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || err.error || `POST /projects/${projectId}/repositories failed: ${res.status}`);
+    }
+    const { data } = await res.json();
+    return {
+      ...data,
+      dependencies: Array.isArray(data.dependencies) ? data.dependencies : [],
+      hasToken: Boolean(data.hasToken),
+    };
+  },
+
+  async updateRepository(projectId: string, repoId: string, payload: Partial<CreateProjectRepositoryInput>): Promise<ProjectRepository> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/repositories/${repoId}`, {
+      method: "PUT",
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || err.error || `PUT /projects/${projectId}/repositories/${repoId} failed: ${res.status}`);
+    }
+    const { data } = await res.json();
+    return {
+      ...data,
+      dependencies: Array.isArray(data.dependencies) ? data.dependencies : [],
+      hasToken: Boolean(data.hasToken),
+    };
+  },
+
+  async syncRepository(projectId: string, repoId: string): Promise<any> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/repositories/${repoId}/sync`, {
+      method: "POST",
+      headers: getHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || err.error || `POST /projects/${projectId}/repositories/${repoId}/sync failed: ${res.status}`);
+    }
+    const { data } = await res.json();
+    return data;
+  },
+
+  async deleteRepository(projectId: string, repoId: string): Promise<{ success: boolean }> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}/repositories/${repoId}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || err.error || `DELETE /projects/${projectId}/repositories/${repoId} failed: ${res.status}`);
+    }
+    return res.json();
   },
 };
 

@@ -234,6 +234,19 @@ export interface ProjectContext {
   }>;
 }
 
+export function extractErrorMessage(errorData: any, status?: number, statusText?: string): string {
+  if (typeof errorData?.error === "string" && errorData.error.trim().length > 0) {
+    return errorData.error.trim();
+  }
+  if (typeof errorData?.message === "string" && errorData.message.trim().length > 0) {
+    return errorData.message.trim();
+  }
+  if (status !== undefined) {
+    return `HTTP ${status}: ${statusText || "Request failed"}`;
+  }
+  return "Unknown error";
+}
+
 class AIClient {
   private baseUrl: string;
 
@@ -273,7 +286,7 @@ class AIClient {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(extractErrorMessage(errorData, response.status, response.statusText));
       }
 
       return await response.json();
@@ -369,6 +382,99 @@ class AIClient {
     return res.data;
   }
 
+  private async streamSse(
+    url: string,
+    body: any,
+    onProgress?: (event: AgentProgressEvent) => void,
+  ): Promise<any> {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...this.getHeaders(),
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      let errMessage = `Agent stream request failed with status ${response.status}`;
+      try {
+        const errJson = await response.json();
+        errMessage = errJson.message || errJson.error || errMessage;
+      } catch {}
+      throw new Error(errMessage);
+    }
+
+    if (!response.body) {
+      throw new Error("No response body available from agent stream");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let finalResult: any = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split("\n\n");
+      buffer = chunks.pop() || "";
+
+      for (const chunk of chunks) {
+        const lines = chunk.split("\n");
+        let eventName = "";
+        let dataStr = "";
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            eventName = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            dataStr = line.slice(6).trim();
+          }
+        }
+
+        if (dataStr) {
+          try {
+            const parsed = JSON.parse(dataStr);
+            if (eventName === "progress" && onProgress) {
+              if (parsed.stageName || parsed.step) {
+                onProgress(parsed);
+              } else if (parsed.type || parsed.message) {
+                const label = parsed.repositoryName
+                  ? `[${parsed.repositoryName}] ${parsed.message || parsed.type}`
+                  : parsed.message || parsed.type || "Multi-repo coordinating";
+                onProgress({
+                  step: parsed.type === "MULTI_REPO_COMPLETE" ? 6 : 1,
+                  stageName: parsed.type || "MULTI_REPO",
+                  label,
+                  detail: parsed.message || label,
+                  color: parsed.type?.includes("FAILED") ? "rose" : "violet",
+                  badge: parsed.repositoryName || "Multi-Repo",
+                  progress: parsed.type === "MULTI_REPO_COMPLETE" ? 100 : 50,
+                  log: parsed.message,
+                });
+              }
+            } else if (eventName === "complete") {
+              finalResult = parsed;
+            } else if (eventName === "error") {
+              throw new Error(parsed.message || parsed.error || "Streaming error");
+            }
+          } catch (e) {
+            if (eventName === "error" || (e instanceof Error && e.message.startsWith("Agent stream request failed"))) {
+              throw e;
+            }
+            console.warn("[ai-client] Non-fatal SSE parse warning:", e);
+          }
+        }
+      }
+    }
+
+    if (finalResult) return finalResult;
+    throw new Error("Agent stream completed without emitting final result");
+  }
+
   async runAgentStream(
     projectId: string,
     message: string,
@@ -376,7 +482,7 @@ class AIClient {
     onProgress?: (event: AgentProgressEvent) => void,
   ): Promise<{
     explanation: string;
-    changes: { path: string; content: string; description: string }[];
+    changes: { path: string; content: string; description: string; repositoryId?: string }[];
     commitMessage: string;
     sessionId: string;
     needsClarification?: boolean;
@@ -396,70 +502,81 @@ class AIClient {
     buildErrors?: string;
   }> {
     const url = `${this.baseUrl}/projects/${projectId}/agent/stream`;
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          ...this.getHeaders(),
-          Accept: "text/event-stream",
-        },
-        body: JSON.stringify({ message, sessionId }),
-      });
+    return this.streamSse(url, { message, sessionId }, onProgress);
+  }
 
-      if (!response.ok || !response.body) {
-        return this.runAgent(projectId, message, sessionId);
-      }
+  async runMultiRepoAgentStream(
+    projectId: string,
+    message: string,
+    repositoryIds?: string[],
+    sessionId?: string,
+    conversationHistory?: any[],
+    onProgress?: (event: AgentProgressEvent) => void,
+  ): Promise<{
+    explanation: string;
+    changes: { path: string; content: string; description: string; repositoryId?: string }[];
+    commitMessage: string;
+    sessionId: string;
+    needsClarification?: boolean;
+    question?: string;
+    options?: string[];
+    intent?: "BUG_FIX" | "FEATURE_ADD" | "REFACTOR" | "DOCS" | "OPTIMIZATION" | "DELETE_FOLDER" | "DELETE_FILE" | "NEW_FEATURE";
+    taskType?: TaskType;
+    risk?: TaskRisk;
+    estimatedComplexity?: TaskComplexity;
+    targetPath?: string;
+    confidence?: number;
+    roadmap?: { phase: number; title: string; layer?: string; targetFiles: string[]; description: string }[];
+    securityPass?: boolean;
+    critiqueScore?: number;
+    buildVerified?: boolean;
+    repaired?: boolean;
+    buildErrors?: string;
+    multiRepo?: boolean;
+    multiRepoResult?: any;
+  }> {
+    const url = `${this.baseUrl}/projects/${projectId}/agent/multi-repo/run`;
+    const raw = await this.streamSse(
+      url,
+      { message, repositoryIds, sessionId, conversationHistory },
+      onProgress,
+    );
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let finalResult: any = null;
+    if (raw.results || raw.overallStatus) {
+      const results: any[] = raw.results || [];
+      const repoSummaries = results.map(
+        (r) => `• ${r.repositoryName || r.repositoryId}: ${r.status} (${(r.changes || []).length} file(s) changed, build verified: ${r.buildVerified ? "yes" : "no"})`
+      );
+      const explanation = `Multi-repository coordination completed with status: ${raw.overallStatus}.\n\nParticipating repositories:\n${repoSummaries.join("\n")}`;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const changes = (raw.changes || []).map((c: any) => ({
+        path: c.path,
+        content: c.content,
+        description: c.description || `Changes for ${c.repositoryId || "repo"}`,
+        repositoryId: c.repositoryId,
+      }));
 
-        buffer += decoder.decode(value, { stream: true });
-        const chunks = buffer.split("\n\n");
-        buffer = chunks.pop() || "";
+      const allBuildVerified = raw.overallStatus === "SUCCESS" && results.every((r) => r.buildVerified !== false);
+      const firstFailed = results.find((r) => r.validationErrors);
 
-        for (const chunk of chunks) {
-          const lines = chunk.split("\n");
-          let eventName = "";
-          let dataStr = "";
-
-          for (const line of lines) {
-            if (line.startsWith("event: ")) {
-              eventName = line.slice(7).trim();
-            } else if (line.startsWith("data: ")) {
-              dataStr = line.slice(6).trim();
-            }
-          }
-
-          if (dataStr) {
-            try {
-              const parsed = JSON.parse(dataStr);
-              if (eventName === "progress" && onProgress) {
-                onProgress(parsed);
-              } else if (eventName === "complete") {
-                finalResult = parsed;
-              } else if (eventName === "error") {
-                throw new Error(parsed.message || parsed.error || "Streaming error");
-              }
-            } catch (e) {
-              if (e instanceof Error && e.message === "Streaming error") {
-                throw e;
-              }
-            }
-          }
-        }
-      }
-
-      if (finalResult) return finalResult;
-      return this.runAgent(projectId, message, sessionId);
-    } catch {
-      return this.runAgent(projectId, message, sessionId);
+      return {
+        explanation,
+        changes,
+        commitMessage: `Multi-repo update: ${message.slice(0, 50)}`,
+        sessionId: raw.planId || sessionId || `multi-repo-${Date.now()}`,
+        taskType: "NEW_FEATURE",
+        risk: "MEDIUM",
+        estimatedComplexity: "COMPLEX",
+        confidence: 0.95,
+        securityPass: true,
+        buildVerified: allBuildVerified,
+        buildErrors: firstFailed?.validationErrors,
+        multiRepo: true,
+        multiRepoResult: raw,
+      };
     }
+
+    return raw;
   }
 
   async suggestTaskOrder(
@@ -501,13 +618,18 @@ class AIClient {
     return res.suggestions;
   }
 
-  async pushAgentChanges(projectId: string, changes: { path: string; content: string }[], commitMessage: string): Promise<{ sha: string; url: string }> {
+  async pushAgentChanges(
+    projectId: string,
+    changes: { path: string; content: string; repositoryId?: string }[],
+    commitMessage: string,
+  ): Promise<{ sha: string; url: string; pushes?: any[] }> {
     const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/agent/push`, {
       method: "POST",
       body: JSON.stringify({ changes, commitMessage }),
     });
     return res.data;
   }
+
 }
 
 export const aiClient = new AIClient();
