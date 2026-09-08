@@ -321,3 +321,48 @@ export interface WorkflowRun {
   modelUsage?: { model: string; prompt_tokens: number; completion_tokens: number };
   costUSD?: number;
 }
+
+// ── Multi-Repository Support ──────────────────────────────────────────────
+export type ProjectRepositoryRole =
+  | "frontend"
+  | "backend"
+  | "mobile"
+  | "infrastructure"
+  | "shared_library"
+  | "documentation"
+  | "data"
+  | "custom";
+
+export interface ProjectRepository {
+  id: string;
+  projectId: string;
+  name: string;
+  role: ProjectRepositoryRole;
+  githubUrl: string;
+  defaultBranch: string;
+  buildCommand?: string | null;
+  testCommand?: string | null;
+  lintCommand?: string | null;
+  typecheckCommand?: string | null;
+  localPath?: string | null;
+  isPrimary: boolean;
+  dependencies?: string[];
+  hasToken: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateProjectRepositoryInput {
+  name: string;
+  role: ProjectRepositoryRole;
+  githubUrl: string;
+  githubToken?: string;
+  defaultBranch?: string;
+  buildCommand?: string;
+  testCommand?: string;
+  lintCommand?: string;
+  typecheckCommand?: string;
+  dependencies?: string[];
+  localPath?: string;
+}
+

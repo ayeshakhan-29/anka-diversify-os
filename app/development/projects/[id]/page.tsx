@@ -17,7 +17,7 @@ import { ProjectAIAssistant } from "@/components/ai/project-ai-assistant";
 import { ProjectIDE } from "@/components/project/project-ide";
 import { PhaseStepper } from "@/components/project/phase-stepper";
 import { PhaseDetailView } from "@/components/project/phase-detail-view";
-import { ProjectRepositoriesPanel } from "@/components/project/project-repositories-panel";
+import { ProjectRepositories } from "@/components/project/project-repositories";
 import { ContextSnapshotAuditPanel } from "@/components/ai/context-snapshot-audit-panel";
 import { ArchitectureDriftPanel } from "@/components/ai/architecture-drift-panel";
 import { FileReservationsPanel } from "@/components/ai/file-reservations-panel";
@@ -75,6 +75,7 @@ import {
   UserPlus,
   GitMerge,
   Unlink,
+  GitBranch,
   MessageSquare,
   Zap,
   Loader2,
@@ -279,9 +280,9 @@ export default function ProjectDetailPage({
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── agent → IDE bridge ──
-  const [pendingAgentChanges, setPendingAgentChanges] = useState<{ path: string; content: string; description: string }[] | null>(null);
+  const [pendingAgentChanges, setPendingAgentChanges] = useState<{ path: string; content: string; description: string; repositoryId?: string }[] | null>(null);
 
-  const handleAgentChanges = (changes: { path: string; content: string; description: string }[]) => {
+  const handleAgentChanges = (changes: { path: string; content: string; description: string; repositoryId?: string }[]) => {
     setPendingAgentChanges(changes);
   };
 
@@ -739,7 +740,7 @@ export default function ProjectDetailPage({
                   { id: "kanban", label: "Kanban Board", icon: Kanban },
                   { id: "workflow", label: "Workflow", icon: Layers },
                   { id: "files", label: "Files", icon: FolderOpen },
-                  { id: "repositories", label: "Repositories", icon: GitMerge },
+                  { id: "repositories", label: "Repositories", icon: GitBranch },
                   { id: "code", label: "Code", icon: Code },
                   { id: "chat", label: "Chat", icon: MessageSquare },
                   { id: "activity", label: "Activity", icon: ActivityIcon },
@@ -1072,8 +1073,8 @@ export default function ProjectDetailPage({
             </TabsContent>
 
             {/* ── Repositories ── */}
-            <TabsContent value="repositories" className="mt-0">
-              <ProjectRepositoriesPanel projectId={id} />
+            <TabsContent value="repositories" className="mt-0 flex-1 p-4 sm:p-6 focus-visible:outline-none">
+              <ProjectRepositories projectId={id} project={project} />
             </TabsContent>
 
             {/* ── Chat ── */}
