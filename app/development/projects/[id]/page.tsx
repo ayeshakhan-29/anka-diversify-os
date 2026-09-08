@@ -18,6 +18,9 @@ import { ProjectIDE } from "@/components/project/project-ide";
 import { PhaseStepper } from "@/components/project/phase-stepper";
 import { PhaseDetailView } from "@/components/project/phase-detail-view";
 import { ProjectRepositories } from "@/components/project/project-repositories";
+import { ContextSnapshotAuditPanel } from "@/components/ai/context-snapshot-audit-panel";
+import { ArchitectureDriftPanel } from "@/components/ai/architecture-drift-panel";
+import { FileReservationsPanel } from "@/components/ai/file-reservations-panel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -736,8 +739,8 @@ export default function ProjectDetailPage({
                 {[
                   { id: "kanban", label: "Kanban Board", icon: Kanban },
                   { id: "workflow", label: "Workflow", icon: Layers },
-                  { id: "repositories", label: "Repositories", icon: GitBranch },
                   { id: "files", label: "Files", icon: FolderOpen },
+                  { id: "repositories", label: "Repositories", icon: GitBranch },
                   { id: "code", label: "Code", icon: Code },
                   { id: "chat", label: "Chat", icon: MessageSquare },
                   { id: "activity", label: "Activity", icon: ActivityIcon },
@@ -769,11 +772,6 @@ export default function ProjectDetailPage({
             >
               <PhaseStepper states={phaseStates} activePhase={workflowPhase} onSelectPhase={setWorkflowPhase} />
               <PhaseDetailView projectId={id} phase={workflowPhase} onStatesChange={setPhaseStates} />
-            </TabsContent>
-
-            {/* ── Repositories ── */}
-            <TabsContent value="repositories" className="mt-0 flex-1 p-4 sm:p-6 focus-visible:outline-none">
-              <ProjectRepositories projectId={id} project={project} />
             </TabsContent>
 
             {/* ── Kanban ── */}
@@ -1074,6 +1072,11 @@ export default function ProjectDetailPage({
               </div>
             </TabsContent>
 
+            {/* ── Repositories ── */}
+            <TabsContent value="repositories" className="mt-0 flex-1 p-4 sm:p-6 focus-visible:outline-none">
+              <ProjectRepositories projectId={id} project={project} />
+            </TabsContent>
+
             {/* ── Chat ── */}
             <TabsContent value="chat" className="mt-0 flex-1 min-h-0 flex flex-col">
               <div className="flex flex-col h-full overflow-hidden gap-4 p-4">
@@ -1158,6 +1161,30 @@ export default function ProjectDetailPage({
                     ))}
                   </div>
                 )}
+
+                <div className="mt-10 pt-6 border-t">
+                  <h2 className="text-lg font-semibold mb-1">AI Context Audit</h2>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    What the AI agent actually saw — repo, files, and task classification — for each run.
+                  </p>
+                  <ContextSnapshotAuditPanel projectId={id} />
+                </div>
+
+                <div className="mt-10 pt-6 border-t">
+                  <h2 className="text-lg font-semibold mb-1">Architecture Drift</h2>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Flagged disagreements between the approved architecture doc and observed repository state.
+                  </p>
+                  <ArchitectureDriftPanel projectId={id} />
+                </div>
+
+                <div className="mt-10 pt-6 border-t">
+                  <h2 className="text-lg font-semibold mb-1">Active File Reservations</h2>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Files currently locked by an in-progress multi-repo agent run, to prevent collisions.
+                  </p>
+                  <FileReservationsPanel projectId={id} />
+                </div>
               </div>
             </TabsContent>
 

@@ -91,6 +91,53 @@ export interface EpicProposal {
   tasks: ProposedTask[];
 }
 
+export interface ContextSnapshot {
+  id: string;
+  projectId: string;
+  repositoryId: string | null;
+  sessionId: string;
+  userMessage: string;
+  repoUrl: string | null;
+  repoName: string | null;
+  defaultBranch: string | null;
+  repoLastSyncedAt: string | null;
+  keyFilesUsed: string[] | null;
+  approvedArchitectureId: string | null;
+  taskType: string | null;
+  risk: string | null;
+  estimatedComplexity: string | null;
+  targetPaths: string[] | null;
+  evidenceLabels: Record<string, string> | null;
+  createdAt: string;
+}
+
+export interface ArchitectureDriftRecord {
+  id: string;
+  projectId: string;
+  description: string;
+  affectedScope: string[] | null;
+  evidence: Record<string, unknown> | null;
+  risk: string;
+  proposedResolution: string | null;
+  ownerUserId: string | null;
+  status: string;
+  detectedBy: string;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+export interface FileReservation {
+  id: string;
+  projectId: string;
+  repositoryId: string | null;
+  filePath: string;
+  holderType: string;
+  sessionId: string;
+  reason: string | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface ProjectHealth {
   score: number;
   status: "healthy" | "warning" | "critical";
@@ -337,6 +384,29 @@ class AIClient {
     return this.request<ProjectHealth>(`/projects/${projectId}/health`);
   }
 
+  async getContextSnapshots(projectId: string): Promise<ContextSnapshot[]> {
+    const res = await this.request<{ success: boolean; data: ContextSnapshot[] }>(`/projects/${projectId}/context-snapshots`);
+    return res.data;
+  }
+
+  async getDriftRecords(projectId: string): Promise<ArchitectureDriftRecord[]> {
+    const res = await this.request<{ success: boolean; data: ArchitectureDriftRecord[] }>(`/projects/${projectId}/drift-records`);
+    return res.data;
+  }
+
+  async getFileReservations(projectId: string): Promise<FileReservation[]> {
+    const res = await this.request<{ success: boolean; data: FileReservation[] }>(`/projects/${projectId}/file-reservations`);
+    return res.data;
+  }
+
+  async resolveDriftRecord(projectId: string, recordId: string, status: string, proposedResolution?: string): Promise<ArchitectureDriftRecord> {
+    const res = await this.request<{ success: boolean; data: ArchitectureDriftRecord }>(`/projects/${projectId}/drift-records/${recordId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status, proposedResolution }),
+    });
+    return res.data;
+  }
+
   async listPullRequests(projectId: string): Promise<{ pullRequests: PullRequest[] }> {
     return this.request(`/projects/${projectId}/prs`);
   }
@@ -354,9 +424,9 @@ class AIClient {
   }
 
   // Coding Agent
-  async runAgent(projectId: string, message: string, sessionId?: string): Promise<{
+  async runAgent(projectId: string, message: string, sessionId?: string, repositoryId?: string): Promise<{
     explanation: string;
-    changes: { path: string; content: string; description: string }[];
+    changes: { path: string; content: string; description: string; repositoryId?: string }[];
     commitMessage: string;
     sessionId: string;
     needsClarification?: boolean;
@@ -377,7 +447,7 @@ class AIClient {
   }> {
     const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/agent/run`, {
       method: "POST",
-      body: JSON.stringify({ message, sessionId }),
+      body: JSON.stringify({ message, sessionId, repositoryId }),
     });
     return res.data;
   }
@@ -480,6 +550,7 @@ class AIClient {
     message: string,
     sessionId?: string,
     onProgress?: (event: AgentProgressEvent) => void,
+    repositoryId?: string,
   ): Promise<{
     explanation: string;
     changes: { path: string; content: string; description: string; repositoryId?: string }[];
@@ -502,7 +573,11 @@ class AIClient {
     buildErrors?: string;
   }> {
     const url = `${this.baseUrl}/projects/${projectId}/agent/stream`;
-    return this.streamSse(url, { message, sessionId }, onProgress);
+    try {
+      return await this.streamSse(url, { message, sessionId, repositoryId }, onProgress);
+    } catch {
+      return this.runAgent(projectId, message, sessionId, repositoryId);
+    }
   }
 
   async runMultiRepoAgentStream(
@@ -622,7 +697,7 @@ class AIClient {
     projectId: string,
     changes: { path: string; content: string; repositoryId?: string }[],
     commitMessage: string,
-  ): Promise<{ sha: string; url: string; pushes?: any[] }> {
+  ): Promise<{ sha: string; url: string; pushes?: { repositoryId: string | null; name: string; sha: string; url: string }[] }> {
     const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/agent/push`, {
       method: "POST",
       body: JSON.stringify({ changes, commitMessage }),

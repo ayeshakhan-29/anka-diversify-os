@@ -7,11 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Bot, RotateCcw, Sparkles, Zap, MessageSquare, Loader2, Check, ExternalLink, FileText, X, ListChecks, HelpCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { AIService, type ProposedTask, type EpicProposal, type ProjectHealth, type AttachedFile } from "@/lib/ai-service";
-import { projectApi } from "@/lib/project-api";
+import { projectApi, projectRepositoryApi, type ProjectRepository } from "@/lib/project-api";
 import { aiClient, type PullRequest, type PRReview } from "@/lib/ai-client";
 import type { Project, Task } from "@/lib/types";
 
@@ -125,6 +126,14 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
   const [repoSnapshot, setRepoSnapshot] = useState<{ repoName: string; fileTree: string[]; lastSyncedAt: string } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Multi-repo: which ProjectRepository this agent run targets (undefined = primary/legacy repo)
+  const [repositories, setRepositories] = useState<ProjectRepository[]>([]);
+  const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    projectRepositoryApi.list(project.id).then(setRepositories).catch(() => {});
+  }, [project.id]);
 
   // Agent
   const [agentResult, setAgentResult] = useState<AgentResult | null>(null);
@@ -400,7 +409,7 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
         // Fall back to single-repo if repository list fails to load
       }
 
-      const isMultiRepo = repos.length >= 2;
+      const isMultiRepo = repos.length >= 2 && !selectedRepositoryId;
 
       const onProgressHandler = (stageEvent: any) => {
         setActiveStage(stageEvent);
@@ -437,8 +446,8 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
             augmentedText,
             sessionId || undefined,
             onProgressHandler,
+            selectedRepositoryId,
           );
-
       if (result.sessionId) setSessionId(result.sessionId);
 
       if (result.needsClarification && result.question) {
@@ -661,17 +670,17 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
       const result = await aiClient.pushAgentChanges(project.id, changes, commitMessage);
       setPushResult(result);
       setAgentResult(null);
-
-      const pushDetails = (result as any).pushes && (result as any).pushes.length > 1
-        ? `\n- **Repositories Pushed (${(result as any).pushes.length}):**\n${(result as any).pushes.map((p: any) => `  • **${p.name}**: [View Commit](${p.url}) (${p.sha?.slice(0, 7)})`).join("\n")}`
-        : `\n- **Repository:** [View Commit on GitHub](${result.url})`;
+      const pushSummary = result.pushes && result.pushes.length > 1
+        ? `\n- **Repositories Pushed (${result.pushes.length}):**\n` +
+          result.pushes.map((p) => `  • **${p.name}**: [View Commit](${p.url})${p.sha ? ` (${p.sha.slice(0, 7)})` : ""}`).join("\n")
+        : `- **Repository:** [View Commit on GitHub](${result.url})`;
 
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now().toString(),
           role: "assistant",
-          content: `🚀 **Changes Authorized & Pushed to GitHub!**\n\n- **Commit Message:** \`${commitMessage}\`\n- **Files Pushed:** ${changes.length}${pushDetails}`,
+          content: `🚀 **Changes Authorized & Pushed to GitHub!**\n\n- **Commit Message:** \`${commitMessage}\`\n- **Files Pushed:** ${changes.length}\n${pushSummary}`,
           timestamp: new Date(),
         },
       ]);
@@ -973,6 +982,23 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {repositories.length > 1 && (
+                <Select
+                  value={selectedRepositoryId || repositories.find((r) => r.isPrimary)?.id}
+                  onValueChange={(v) => setSelectedRepositoryId(v === repositories.find((r) => r.isPrimary)?.id ? undefined : v)}
+                >
+                  <SelectTrigger className="h-8 w-36 text-xs">
+                    <SelectValue placeholder="Repository" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {repositories.map((repo) => (
+                      <SelectItem key={repo.id} value={repo.id}>
+                        {repo.name}{repo.isPrimary ? " (primary)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Badge variant="outline" className="text-xs">
                 <Sparkles className="h-3 w-3 mr-1" />GPT-4o
               </Badge>
@@ -1032,6 +1058,7 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
               isApplyingLocal={isApplyingLocal}
               applyLocalSuccess={applyLocalSuccess}
               project={project}
+              repositories={repositories}
               onToggleFile={toggleFile}
               onCommitMessageChange={setCommitMessage}
               onPush={handlePush}

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { getChangeKey, type AgentResult, type AgentFileChange } from "./types";
 import type { Project } from "@/lib/types";
+import type { ProjectRepository } from "@/lib/project-api";
 
 interface AgentDiffPanelProps {
   agentResult: AgentResult;
@@ -35,6 +36,7 @@ interface AgentDiffPanelProps {
   isApplyingLocal: boolean;
   applyLocalSuccess: boolean;
   project: Project;
+  repositories?: ProjectRepository[];
   onToggleFile: (keyOrPath: string) => void;
   onCommitMessageChange: (msg: string) => void;
   onPush: () => void;
@@ -53,6 +55,7 @@ export function AgentDiffPanel({
   isApplyingLocal,
   applyLocalSuccess,
   project,
+  repositories = [],
   onToggleFile,
   onCommitMessageChange,
   onPush,
@@ -287,6 +290,12 @@ export function AgentDiffPanel({
             const changeKey = getChangeKey(change);
             const isExpanded = expandedFile === changeKey || expandedFile === change.path;
             const isSelected = selectedFiles.has(changeKey) || selectedFiles.has(change.path);
+            const repoBadge =
+              repositories.find((r) => r.id === change.repositoryId)?.name ||
+              (repositories.find((r) => r.isPrimary)?.id === change.repositoryId
+                ? repositories.find((r) => r.isPrimary)?.name
+                : null) ||
+              change.repositoryId;
 
             return (
               <div key={changeKey} className="rounded-md border bg-background overflow-hidden">
@@ -303,9 +312,9 @@ export function AgentDiffPanel({
                   />
                   <Code className="h-3.5 w-3.5 text-violet-400 shrink-0" />
                   <span className="text-xs font-mono flex-1 truncate">{change.path}</span>
-                  {change.repositoryId && (
+                  {(repositories.length > 1 || change.repositoryId) && repoBadge && (
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20 shrink-0">
-                      {change.repositoryId}
+                      {repoBadge}
                     </span>
                   )}
                   <span className="text-xs text-muted-foreground truncate max-w-48">

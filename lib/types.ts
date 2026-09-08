@@ -346,7 +346,7 @@ export interface ProjectRepository {
   typecheckCommand?: string | null;
   localPath?: string | null;
   isPrimary: boolean;
-  dependencies: string[];
+  dependencies?: string[];
   hasToken: boolean;
   createdAt?: string;
   updatedAt?: string;
