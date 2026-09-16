@@ -140,16 +140,19 @@ export interface FileReservation {
 
 export interface ProjectHealth {
   score: number;
-  status: "healthy" | "warning" | "critical";
-  flags: string[];
-  recommendations: string[];
-  stats: {
+  status: "HEALTHY" | "FAIR" | "WARNING" | "AT_RISK";
+  progress: {
     totalTasks: number;
     completedTasks: number;
-    overdueTasks: number;
-    inProgressTasks: number;
-    completionRate: number;
+    percent: number | null;
   };
+  activity: { lastActivityAt: string | null; daysSinceActivity: number | null };
+  repository: { connected: boolean; indexed: boolean; trackedFiles: number; lastSyncedAt: string | null };
+  blockers: { count: number };
+  overdue: { count: number };
+  inProgress: { count: number };
+  recommendations: Array<{ code: string; message: string }>;
+  calculatedAt: string;
 }
 
 export interface PullRequest {
@@ -294,6 +297,23 @@ export function extractErrorMessage(errorData: any, status?: number, statusText?
   return "Unknown error";
 }
 
+export class AIClientError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "AIClientError";
+  }
+}
+
+export function isGitApprovalUnavailable(error: unknown): error is AIClientError {
+  return error instanceof AIClientError && (
+    error.code === "GIT_APPROVAL_NOT_FOUND" || error.code === "GIT_APPROVAL_EXPIRED"
+  );
+}
+
 class AIClient {
   private baseUrl: string;
 
@@ -333,13 +353,21 @@ class AIClient {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(extractErrorMessage(errorData, response.status, response.statusText));
+        const code = typeof errorData?.error === "string" && errorData.error.trim()
+          ? errorData.error.trim()
+          : `HTTP_${response.status}`;
+        const message = typeof errorData?.message === "string" && errorData.message.trim()
+          ? errorData.message.trim()
+          : extractErrorMessage(errorData, response.status, response.statusText);
+        throw new AIClientError(code, message, response.status);
       }
 
       return await response.json();
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") throw error;
-      console.error(`AI Client Error (${endpoint}):`, error);
+      if (!(error instanceof AIClientError)) {
+        console.error(`AI Client Error (${endpoint}):`, error);
+      }
       throw error;
     }
   }
@@ -407,17 +435,17 @@ class AIClient {
     return res.data;
   }
 
-  async listPullRequests(projectId: string): Promise<{ pullRequests: PullRequest[] }> {
-    return this.request(`/projects/${projectId}/prs`);
+  async listPullRequests(projectId: string): Promise<{ pullRequests: PullRequest[]; total: number; fetchedAt: string }> {
+    return this.request(`/projects/${projectId}/pull-requests`);
   }
 
   async reviewPullRequest(projectId: string, prNumber: number): Promise<PRReview> {
-    return this.request(`/projects/${projectId}/prs/${prNumber}/review`, { method: "POST" });
+    return this.request(`/projects/${projectId}/pull-requests/${prNumber}/review`, { method: "POST" });
   }
 
   async generatePRDescription(projectId: string, prNumber: number): Promise<{ title: string; description: string }> {
     const res = await this.request<{ success: boolean; data: { title: string; description: string } }>(
-      `/projects/${projectId}/prs/${prNumber}/describe`,
+      `/projects/${projectId}/pull-requests/${prNumber}/describe`,
       { method: "POST" },
     );
     return res.data;
@@ -444,6 +472,7 @@ class AIClient {
     buildVerified?: boolean;
     repaired?: boolean;
     buildErrors?: string;
+    gitApproval?: { approvalId: string; changedPaths: readonly string[]; expiresAt: string };
   }> {
     const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/agent/run`, {
       method: "POST",
@@ -571,6 +600,7 @@ class AIClient {
     buildVerified?: boolean;
     repaired?: boolean;
     buildErrors?: string;
+    gitApproval?: { approvalId: string; changedPaths: readonly string[]; expiresAt: string };
   }> {
     const url = `${this.baseUrl}/projects/${projectId}/agent/stream`;
     try {
@@ -697,10 +727,11 @@ class AIClient {
     projectId: string,
     changes: { path: string; content: string; repositoryId?: string }[],
     commitMessage: string,
+    approvalId: string,
   ): Promise<{ sha: string; url: string; pushes?: { repositoryId: string | null; name: string; sha: string; url: string }[] }> {
     const res = await this.request<{ success: boolean; data: any }>(`/projects/${projectId}/agent/push`, {
       method: "POST",
-      body: JSON.stringify({ changes, commitMessage }),
+      body: JSON.stringify({ changes, commitMessage, approvalId }),
     });
     return res.data;
   }
