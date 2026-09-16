@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { AIService, type ProposedTask, type EpicProposal, type ProjectHealth, type AttachedFile } from "@/lib/ai-service";
 import { projectApi, projectRepositoryApi, type ProjectRepository } from "@/lib/project-api";
-import { aiClient, type PullRequest, type PRReview } from "@/lib/ai-client";
+import { aiClient, isGitApprovalUnavailable, type PullRequest, type PRReview } from "@/lib/ai-client";
 import type { Project, Task } from "@/lib/types";
 
 import { getChangeKey, normalizePreservedSelection, toggleChangeSelection, type Message, type AgentResult, type AgentFileChange } from "./types";
@@ -179,8 +179,12 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
 
   // Health + PRs
   const [health, setHealth] = useState<ProjectHealth | null>(null);
+  const [healthLoading, setHealthLoading] = useState(true);
+  const [healthError, setHealthError] = useState<string | null>(null);
   const [pullRequests, setPullRequests] = useState<PullRequest[] | null>(null);
   const [prsLoading, setPrsLoading] = useState(false);
+  const [prsError, setPrsError] = useState<string | null>(null);
+  const prRequestInFlightRef = useRef(false);
   const [reviewingPR, setReviewingPR] = useState<number | null>(null);
   const [prReviews, setPrReviews] = useState<Record<number, PRReview>>({});
   const [activePrReview, setActivePrReview] = useState<number | null>(null);
@@ -321,7 +325,15 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
   }, [project.id]);
 
   useEffect(() => {
-    aiClient.getProjectHealth(project.id).then(setHealth).catch(() => {});
+    setHealthLoading(true);
+    setHealthError(null);
+    aiClient.getProjectHealth(project.id)
+      .then(setHealth)
+      .catch((error: unknown) => {
+        setHealth(null);
+        setHealthError(error instanceof Error ? error.message : "Unable to calculate project health");
+      })
+      .finally(() => setHealthLoading(false));
   }, [project.id]);
 
   useEffect(() => {
@@ -657,6 +669,10 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
 
   const handlePush = async () => {
     if (!agentResult) return;
+    if (!agentResult.gitApproval) {
+      setPushError("This proposal predates the verified Git approval handoff. Run the agent again to create a shippable verified result.");
+      return;
+    }
     const changes = agentResult.changes.filter((c) =>
       selectedFiles.has(getChangeKey(c)) || selectedFiles.has(c.path)
     );
@@ -667,7 +683,12 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
     setIsPushing(true);
     setPushError(null);
     try {
-      const result = await aiClient.pushAgentChanges(project.id, changes, commitMessage);
+      const result = await aiClient.pushAgentChanges(
+        project.id,
+        changes,
+        commitMessage,
+        agentResult.gitApproval.approvalId,
+      );
       setPushResult(result);
       setAgentResult(null);
       const pushSummary = result.pushes && result.pushes.length > 1
@@ -686,7 +707,12 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
       ]);
       completeActiveTask();
     } catch (err) {
-      setPushError(err instanceof Error ? err.message : "Push failed");
+      if (isGitApprovalUnavailable(err)) {
+        setAgentResult((current) => current ? { ...current, gitApproval: undefined } : current);
+        setPushError("This verified push approval is no longer available because the backend restarted or the approval expired. Run the agent again to create a new verified result.");
+      } else {
+        setPushError(err instanceof Error ? err.message : "Push failed");
+      }
     } finally {
       setIsPushing(false);
     }
@@ -824,13 +850,17 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
   };
 
   const loadPullRequests = async () => {
+    if (prRequestInFlightRef.current) return;
+    prRequestInFlightRef.current = true;
     setPrsLoading(true);
+    setPrsError(null);
     try {
       const { pullRequests: prs } = await aiClient.listPullRequests(project.id);
       setPullRequests(prs);
-    } catch {
-      setPullRequests([]);
+    } catch (error) {
+      setPrsError(error instanceof Error ? error.message : "Unable to load pull requests");
     } finally {
+      prRequestInFlightRef.current = false;
       setPrsLoading(false);
     }
   };
@@ -1232,8 +1262,11 @@ export function ProjectAIAssistant({ project, tasks = [], onAgentChanges, runTas
         isSyncing={isSyncing}
         syncError={syncError}
         health={health}
+        healthLoading={healthLoading}
+        healthError={healthError}
         pullRequests={pullRequests}
         prsLoading={prsLoading}
+        prsError={prsError}
         reviewingPR={reviewingPR}
         prReviews={prReviews}
         onGithubUrlChange={setGithubUrl}

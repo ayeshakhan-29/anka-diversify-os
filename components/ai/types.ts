@@ -67,6 +67,11 @@ export interface AgentResult {
   verificationChecklist?: ChecklistItem[];
   lifecycleStage?: string;
   visualVerification?: VisualVerificationResult;
+  gitApproval?: {
+    approvalId: string;
+    changedPaths: readonly string[];
+    expiresAt: string;
+  };
 }
 
 /**

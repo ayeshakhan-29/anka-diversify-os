@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,8 +16,6 @@ import {
   Bug,
   FileText,
   Check,
-  Plus,
-  Minus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/types";
@@ -31,8 +30,11 @@ interface AISidebarProps {
   isSyncing: boolean;
   syncError: string | null;
   health: ProjectHealth | null;
+  healthLoading: boolean;
+  healthError: string | null;
   pullRequests: PullRequest[] | null;
   prsLoading: boolean;
+  prsError: string | null;
   reviewingPR: number | null;
   prReviews: Record<number, PRReview>;
   prDescriptions: Record<number, { title: string; description: string }>;
@@ -68,8 +70,11 @@ export function AISidebar({
   isSyncing,
   syncError,
   health,
+  healthLoading,
+  healthError,
   pullRequests,
   prsLoading,
+  prsError,
   reviewingPR,
   prReviews,
   prDescriptions,
@@ -83,6 +88,16 @@ export function AISidebar({
   onSetInput,
 }: AISidebarProps) {
   const suggestions = mode === "chat" ? chatPrompts : agentPrompts;
+  const [showRecommendations, setShowRecommendations] = useState(false);
+
+  const relativeTime = (timestamp: string) => {
+    const days = Math.max(0, Math.floor((Date.now() - new Date(timestamp).getTime()) / 86_400_000));
+    if (days === 0) return "today";
+    if (days === 1) return "1 day ago";
+    if (days < 14) return `${days} days ago`;
+    if (days < 60) return `${Math.floor(days / 7)} weeks ago`;
+    return `${Math.floor(days / 30)} months ago`;
+  };
 
   return (
     <div className="w-64 space-y-3 shrink-0 hidden lg:flex lg:flex-col overflow-y-auto">
@@ -177,35 +192,34 @@ export function AISidebar({
                 ) : pullRequests === null ? (
                   "Load"
                 ) : (
-                  <RefreshCw className="h-3 w-3" />
+                  "Refresh"
                 )}
               </button>
             </div>
           </CardHeader>
           <CardContent className="px-3 pb-3">
-            {pullRequests === null ? (
-              <p className="text-xs text-muted-foreground">Click Load to fetch open PRs</p>
+            {prsLoading ? (
+              <p className="text-xs text-muted-foreground">Loading pull requests…</p>
+            ) : prsError ? (
+              <p className="text-xs text-destructive">Unable to load pull requests</p>
+            ) : pullRequests === null ? (
+              <p className="text-xs text-muted-foreground">Load open pull requests</p>
             ) : pullRequests.length === 0 ? (
               <p className="text-xs text-muted-foreground">No open pull requests</p>
             ) : (
               <div className="space-y-2">
                 {pullRequests.map((pr) => (
                   <div key={pr.number} className="rounded-md border bg-secondary/20 p-2 space-y-1">
-                    <div className="flex items-start justify-between gap-1">
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium truncate">{pr.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          #{pr.number} · {pr.author}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-xs text-green-400 flex items-center gap-0.5">
-                          <Plus className="h-2.5 w-2.5" />{pr.additions}
-                        </span>
-                        <span className="text-xs text-red-400 flex items-center gap-0.5">
-                          <Minus className="h-2.5 w-2.5" />{pr.deletions}
-                        </span>
-                      </div>
+                    <div className="min-w-0">
+                      <a href={pr.url} target="_blank" rel="noreferrer" className="text-xs font-medium hover:underline line-clamp-2">
+                        #{pr.number} {pr.title}
+                      </a>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {pr.headBranch} → {pr.baseBranch}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {pr.author || "Unknown author"} · updated {relativeTime(pr.updatedAt)}
+                      </p>
                     </div>
                     <div className="flex gap-1">
                       <Button
@@ -293,74 +307,86 @@ export function AISidebar({
       )}
 
       {/* Project Health Score */}
-      {health && (
-        <Card>
-          <CardHeader className="pb-2 pt-3 px-3">
-            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-              <Sparkles className="h-3 w-3" />Project Health
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  "text-2xl font-bold",
-                  health.status === "healthy"
-                    ? "text-green-400"
-                    : health.status === "warning"
-                      ? "text-yellow-400"
-                      : "text-red-400",
-                )}
-              >
-                {health.score}
-              </div>
-              <div>
+      <Card>
+        <CardHeader className="pb-2 pt-3 px-3">
+          <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+            <Sparkles className="h-3 w-3" />Project Health
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 pb-3 space-y-2">
+          {healthLoading ? (
+            <p className="text-xs text-muted-foreground">Calculating project health…</p>
+          ) : healthError || !health ? (
+            <p className="text-xs text-destructive">Unable to calculate project health</p>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
                 <div
                   className={cn(
-                    "text-xs font-medium capitalize",
-                    health.status === "healthy"
+                    "text-2xl font-bold",
+                    health.status === "HEALTHY"
                       ? "text-green-400"
-                      : health.status === "warning"
+                      : health.status === "FAIR" || health.status === "WARNING"
                         ? "text-yellow-400"
                         : "text-red-400",
                   )}
                 >
-                  {health.status}
+                  {health.score}
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {health.stats.completionRate}% done
-                </div>
-              </div>
-            </div>
-            {health.flags.length > 0 && (
-              <div className="space-y-1">
-                {health.flags.map((flag, i) => (
-                  <div key={i} className="flex items-start gap-1 text-xs text-yellow-400">
-                    <span className="shrink-0 mt-0.5">⚠</span>{flag}
+                <div>
+                  <div
+                    className={cn(
+                      "text-xs font-medium capitalize",
+                      health.status === "HEALTHY"
+                        ? "text-green-400"
+                        : health.status === "FAIR" || health.status === "WARNING"
+                          ? "text-yellow-400"
+                          : "text-red-400",
+                    )}
+                  >
+                    {health.status.replace("_", " ").toLowerCase()}
                   </div>
-                ))}
+                  <div className="text-xs text-muted-foreground">
+                    {health.progress.percent === null ? "No tasks yet" : `${health.progress.percent}% done`}
+                  </div>
+                </div>
               </div>
-            )}
-            {health.stats.overdueTasks > 0 && (
-              <div className="text-xs text-red-400 font-medium">
-                {health.stats.overdueTasks} overdue
-              </div>
-            )}
-            {health.recommendations.length > 0 && (
-              <button
-                className="text-xs text-primary hover:underline text-left"
-                onClick={() =>
-                  onQuickAction(
-                    `My project health score is ${health.score}/100 with these flags: ${health.flags.join(", ")}. Give me specific actionable steps to improve it.`,
-                  )
-                }
-              >
-                Get recommendations →
-              </button>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              <p className="text-xs text-muted-foreground">
+                {health.activity.daysSinceActivity === null || !health.activity.lastActivityAt
+                  ? "No activity recorded"
+                  : health.activity.daysSinceActivity === 0
+                    ? "Active today"
+                    : `Last activity ${relativeTime(health.activity.lastActivityAt)}`}
+              </p>
+              {health.blockers.count > 0 && (
+                <div className="text-xs text-yellow-400 font-medium">
+                  {health.blockers.count} blocked
+                </div>
+              )}
+              {health.overdue.count > 0 && (
+                <div className="text-xs text-red-400 font-medium">
+                  {health.overdue.count} overdue
+                </div>
+              )}
+              {health.recommendations.length > 0 && (
+                <div className="space-y-1">
+                  <button
+                    className="text-xs text-primary hover:underline text-left"
+                    onClick={() => setShowRecommendations((shown) => !shown)}
+                  >
+                    {showRecommendations ? "Hide recommendations" : "Get recommendations →"}
+                  </button>
+                  {showRecommendations && health.recommendations.map((recommendation) => (
+                    <p key={recommendation.code} className="text-xs text-muted-foreground">
+                      {recommendation.message}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Project context */}
       <Card>
@@ -382,10 +408,10 @@ export function AISidebar({
             <span className="text-muted-foreground">Progress</span>
             <span>{project.progress}%</span>
           </div>
-          {health && health.stats.overdueTasks > 0 && (
+          {health && health.overdue.count > 0 && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Overdue</span>
-              <span className="text-red-400 font-medium">{health.stats.overdueTasks}</span>
+              <span className="text-red-400 font-medium">{health.overdue.count}</span>
             </div>
           )}
         </CardContent>

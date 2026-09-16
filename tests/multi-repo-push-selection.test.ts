@@ -6,7 +6,7 @@ import {
   toggleChangeSelection,
   type AgentFileChange
 } from "../components/ai/types";
-import { extractErrorMessage } from "../lib/ai-client";
+import { AIClientError, extractErrorMessage, isGitApprovalUnavailable } from "../lib/ai-client";
 
 test("Multi-Repo Push Selection Compatibility & Error Visibility", async (t) => {
   const repoA = "cmto0ny8w000hkd5vx6m7jve9"; // API
@@ -160,6 +160,21 @@ test("Multi-Repo Push Selection Compatibility & Error Visibility", async (t) => 
 
     const emptyObj = extractErrorMessage(null, 502, "Bad Gateway");
     assert.strictEqual(emptyObj, "HTTP 502: Bad Gateway");
+  });
+
+  await t.test("10a. stale and expired Git approvals are typed recovery conditions", () => {
+    assert.strictEqual(
+      isGitApprovalUnavailable(new AIClientError("GIT_APPROVAL_NOT_FOUND", "Approval missing", 409)),
+      true,
+    );
+    assert.strictEqual(
+      isGitApprovalUnavailable(new AIClientError("GIT_APPROVAL_EXPIRED", "Approval expired", 409)),
+      true,
+    );
+    assert.strictEqual(
+      isGitApprovalUnavailable(new AIClientError("GIT_STAGE_MISMATCH", "Stage mismatch", 409)),
+      false,
+    );
   });
 
   await t.test("11. normalizePreservedSelection migrates unambiguous plain paths and keeps ambiguous paths safe", () => {
